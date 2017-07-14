@@ -1,0 +1,121 @@
+A549_0_ug_per_ml_AgNP_0_Gy_update <- read_excel("A549 0 ug per ml AgNP 0 Gy update.xlsx")
+
+#Add columns for treatment conditions
+A549_0_ug_per_ml_AgNP_0_Gy_update$AgNP<-0
+A549_0_ug_per_ml_AgNP_0_Gy_update$IR<-0
+A549_0_ug_per_ml_AgNP_0_Gy_update$treatment<-"0AgNP 0Gy"
+
+A549_0_ug_per_ml_AgNP_0_5_Gy_update <- read_excel("A549 0 ug per ml AgNP 0.5 Gy_update.xlsx")
+A549_0_ug_per_ml_AgNP_0_5_Gy_update$AgNP<-0
+A549_0_ug_per_ml_AgNP_0_5_Gy_update$IR<-0.5
+A549_0_ug_per_ml_AgNP_0_5_Gy_update$treatment<-"0AgNP 0.5Gy"
+
+A549_0_ug_per_ml_AgNP_2_Gy_update <- read_excel("A549 0 ug per ml AgNP 2 Gy_update.xlsx")
+A549_0_ug_per_ml_AgNP_2_Gy_update$treatment<-"0AgNP 2Gy"
+A549_0_ug_per_ml_AgNP_2_Gy_update$AgNP<-0
+A549_0_ug_per_ml_AgNP_2_Gy_update$IR<-2
+
+#Delete columns
+#A549.0AgNP.2Gy$treatment<-NULL
+#A549.0AgNP.2Gy$AgNP<-NULL
+#A549.0AgNP.2Gy$IR<-NULL
+
+A549_1_ug_per_ml_AgNP_0_Gy_update <- read_excel("A549 1 ug per ml AgNP 0 Gy_update.xlsx")
+A549_1_ug_per_ml_AgNP_0_Gy_update$AgNP<-1
+A549_1_ug_per_ml_AgNP_0_Gy_update$IR<-0
+A549_1_ug_per_ml_AgNP_0_Gy_update$treatment<-"1AgNP 0Gy"
+
+A549_1_ug_per_ml_AgNP_0_5_Gy_update <- read_excel("A549 1 ug per ml AgNP 0.5 Gy_update.xlsx")
+A549_1_ug_per_ml_AgNP_0_5_Gy_update$AgNP<-1
+A549_1_ug_per_ml_AgNP_0_5_Gy_update$IR<-0.5
+A549_1_ug_per_ml_AgNP_0_5_Gy_update$treatment<-"1AgNP 0.5Gy"
+
+A549_1_ug_per_ml_AgNP_2_Gy_update <- read_excel("A549 1 ug per ml AgNP 2 Gy_update.xlsx")
+A549_1_ug_per_ml_AgNP_2_Gy_update$AgNP<-1
+A549_1_ug_per_ml_AgNP_2_Gy_update$IR<-2
+A549_1_ug_per_ml_AgNP_2_Gy_update$treatment<-"1AgNP 2Gy"
+
+A549_10_ug_per_ml_AgNP_2_Gy_update <- read_excel("A549 10 ug per ml AgNP 2 Gy_update.xlsx")
+A549_10_ug_per_ml_AgNP_2_Gy_update$AgNP<-10
+A549_10_ug_per_ml_AgNP_2_Gy_update$IR<-2
+A549_10_ug_per_ml_AgNP_2_Gy_update$treatment<-"10AgNP 2Gy"
+
+A549_10_ug_per_ml_AgNP_0_5_Gy_update <- read_excel("A549 10 ug per ml AgNP 0.5 Gy_update.xlsx")
+A549_10_ug_per_ml_AgNP_0_5_Gy_update$AgNP<-10
+A549_10_ug_per_ml_AgNP_0_5_Gy_update$IR<-0.5
+A549_10_ug_per_ml_AgNP_0_5_Gy_update$treatment<-"10AgNP 0.5Gy"
+
+A549_10_ug_per_ml_AgNP_0_Gy_update <- read_excel("A549 10 ug per ml AgNP 0 Gy_update.xlsx")
+A549_10_ug_per_ml_AgNP_0_Gy_update$AgNP<-10
+A549_10_ug_per_ml_AgNP_0_Gy_update$IR<-0
+A549_10_ug_per_ml_AgNP_0_Gy_update$treatment<-"10AgNP 0Gy"
+
+A549_50_ug_per_ml_AgNP_0_Gy_update <- read_excel("A549 50 ug per ml AgNP 0 Gy_update.xlsx")
+A549_50_ug_per_ml_AgNP_0_Gy_update$AgNP<-50
+A549_50_ug_per_ml_AgNP_0_Gy_update$IR<-0
+A549_50_ug_per_ml_AgNP_0_Gy_update$treatment<-"50AgNP 0Gy"
+
+A549_50_ug_per_ml_AgNP_0_5_Gy_update <- read_excel("A549 50 ug per ml AgNP 0.5 Gy_update.xlsx")
+A549_50_ug_per_ml_AgNP_0_5_Gy_update$AgNP<-50
+A549_50_ug_per_ml_AgNP_0_5_Gy_update$IR<-0.5
+A549_50_ug_per_ml_AgNP_0_5_Gy_update$treatment<-"50AgNP 0.5Gy"
+
+A549_50_ug_per_ml_AgNP_2_Gy_update <- read_excel("A549 50 ug per ml AgNP 2 Gy_update.xlsx")
+A549_50_ug_per_ml_AgNP_2_Gy_update$treatment<-"50AgNP 2Gy"
+A549_50_ug_per_ml_AgNP_2_Gy_update$AgNP<-50
+A549_50_ug_per_ml_AgNP_2_Gy_update$IR<-2
+
+#Merge data frames by rows
+XC210<-rbind(A549_0_ug_per_ml_AgNP_2_Gy_update,
+             A549_0_ug_per_ml_AgNP_0_5_Gy_update,
+             A549_0_ug_per_ml_AgNP_0_Gy_update,
+             A549_1_ug_per_ml_AgNP_0_Gy_update,
+             A549_1_ug_per_ml_AgNP_0_5_Gy_update,
+             A549_1_ug_per_ml_AgNP_2_Gy_update,
+             A549_10_ug_per_ml_AgNP_0_Gy_update,
+             A549_10_ug_per_ml_AgNP_0_5_Gy_update,
+             A549_10_ug_per_ml_AgNP_2_Gy_update,
+             A549_50_ug_per_ml_AgNP_2_Gy_update,
+             A549_50_ug_per_ml_AgNP_0_5_Gy_update,
+             A549_50_ug_per_ml_AgNP_0_Gy_update)
+
+#remove statistics rows
+XC210<-XC210[-c(grep("Mean",XC210$FileName),
+                grep("Median",XC210$FileName),
+                grep("Stddev",XC210$FileName),
+                grep("Min",XC210$FileName),
+                grep("Max",XC210$FileName)),]
+
+#remove deleted points
+XC210<-XC210[!XC210$Flag == "deleted",]
+
+#convert AgNP and IR doses from numerics to factors
+XC210$AgNP<-factor(XC210$AgNP)
+XC210$IR<-factor(XC210$IR)
+
+library(ggplot2)
+a<-ggplot(XC210,aes(x = IR, y = TailDNAPercent,color = AgNP))+
+  ylab("Tail DNA %") +
+  scale_x_discrete(labels = c("No IR", "0.5 Gy", "2 Gy")) +
+  scale_color_discrete(labels = c("No AgNP","1 ug/ml AgNP",
+                                "10 ug/ml AgNP","50 ug/ml AgNP")) +
+  theme(axis.title.x = element_blank(),
+        legend.title = element_blank(),
+        panel.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.background = element_rect(color = "black"),
+        axis.text.x = element_text(color = "Black", 
+                                   size = 10),
+        axis.text.y = element_text(color = "Black", 
+                                   size = 10),
+        axis.title.y = element_text(size = 10))
+
+a+geom_dotplot(binaxis = "y", stackdir = "center",binwidth = 0.5,
+               dotsize = 1,position = position_dodge(0.75)) +
+  geom_boxplot(outlier.shape = NA,alpha = 0.5,
+               position=position_dodge(0.75)) +
+  #add mean points
+  stat_summary(fun.y = mean, geom = "point", shape = 18,
+               size = 5,position = position_dodge(0.75))
