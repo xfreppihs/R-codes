@@ -1,0 +1,64 @@
+time<-c(0,15,30,60,120)
+dimedone<-c(0,0.367695417,0.403122793,0.48551231,0.537391821)
+FDCP<-c(0,0.104669418,0.175177001,0.244871673,0.292193131)
+data<-data.frame(time,dimedone,FDCP)
+
+#dimedone curve
+plot(data$dimedone~data$time)
+starting_C1<-0.6 #as the curve is approaching 0.6
+#use lm to get starting k value 
+#transform y = C(1-exp((-k)*x)) into ln(1-y/C)=-k*x
+lm1<-lm(-log(1-dimedone/starting_C1)~time,data=data,na.action= na.omit)
+summary(lm1)
+starting_k1<-coef(lm1)[2]
+#run nls model
+nls1<- nls(dimedone~C*(1-exp((-k)*time)),data=data,
+           start = list(C = starting_C1,k = starting_k1))
+summary(nls1)
+
+#FDCP curve
+plot(data$FDCP~data$time)
+starting_C2<-0.3 #as the curve is approaching 0.3
+#use lm to get starting k value 
+#transform y = C(1-exp((-k)*x)) into ln(1-y/C)=-k*x
+lm2<-lm(-log(1-FDCP/starting_C2)~time,data=data,na.action= na.omit)
+summary(lm2)
+starting_k2<-coef(lm2)[2]
+#run nls model
+nls2<- nls(FDCP~C*(1-exp((-k)*time)),data=data,
+           start = list(C = starting_C2,k = starting_k2))
+summary(nls2)
+
+#melt data for ggplot
+library(reshape)
+data_melt<-melt(data,id="time")
+
+#create more "time" points for the fitted line
+newdata <- expand.grid(time=seq(0, 120, length=100),
+                       variable = c("dimedone","FDCP"))
+# predict newdata
+predict1 <- predict(nls1,newdata)
+predict2 <- predict(nls2,newdata)
+# new data with predictions
+newdata$prediction <- c(predict1[1:100],predict2[1:100])
+
+ggplot(data_melt, aes(x = time, y = value*100, shape = variable))+
+  geom_point(size = I(3)) +
+  geom_line(data=newdata, aes(x = time, y = prediction*100), size = I(1)) +
+  xlab("Time (min)") + ylab("Product formation (%)") +
+  coord_cartesian(ylim = c(0, 100)) + #set the viewing area
+  scale_y_continuous(breaks = seq(0, 100, 20))+
+  scale_shape_discrete(labels = c("Dimedone","DCPET")) +
+  theme(legend.position = c(1,1),
+        legend.justification = c(1,1),
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12),
+        legend.background = element_rect(color = "black"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(), 
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(size = 12),
+        axis.line = element_line(size = 1))
