@@ -1,0 +1,144 @@
+library(readxl)
+XC221 <- read_excel("C:/Chen/Immunofluorescence/XC221 1-30-17/Foci-Counter-Results.xlsx")
+colnames(XC221)
+
+#remove extra columns
+XC221$`Count Big = 100 ` <- NULL
+
+#remove summary rows
+XC221 <- XC221[XC221$File != "cell number",]
+
+#add new columns for experimental conditions
+XC221$antibody <- NA
+XC221$antibody[-grep("53BP1",XC221$File)] <- "gH2AX"
+XC221$antibody[grep("53BP1",XC221$File)] <- "53BP1"
+XC221$AgNP <- NA
+XC221$AgNP[grep("0ug",XC221$File)] <- 0
+XC221$AgNP[grep("1ug",XC221$File)] <- 1
+XC221$AgNP[grep("10ug",XC221$File)] <- 10
+XC221$IR<-NA
+XC221$IR[grep("0Gy",XC221$File)] <- 0
+XC221$IR[grep("0.5Gy",XC221$File)] <- 0.5
+XC221$IR[grep("2Gy",XC221$File)] <- 2
+XC221$time <- NA
+XC221$time[grep("1h",XC221$File)] <- 1
+XC221$time[grep("24h",XC221$File)] <- 24
+XC221$IR.time <- interaction(XC221$IR,XC221$time)
+XC221$id <- interaction(XC221$antibody,XC221$AgNP,XC221$IR,XC221$time)
+
+#remove NA rows
+XC221 <- XC221[complete.cases(XC221),]
+
+#convert AgNP, IR and time from numerics to factors
+XC221$AgNP <- factor(XC221$AgNP)
+XC221$IR <- factor(XC221$IR)
+XC221$time <- factor(XC221$time)
+
+#convert to dataframe
+XC221 <- as.data.frame(XC221)
+summary(XC221)
+str(XC221)
+
+#Find unique combinations of experiment conditions
+uniq <- unique(XC221$id)
+
+#create an empty dataframe to store outliers-removed data
+XC221.no.outlier <- XC221[FALSE,]
+
+for (i in 1:length(uniq)){
+  #loop through each experiment condition
+  temp <- subset(XC221,id == uniq[i])
+  #get the min/max values
+  max <- quantile(temp[,5],0.75, na.rm=TRUE) + (IQR(temp[,5], na.rm=TRUE) * 1.5 )
+  min <- quantile(temp[,5],0.25, na.rm=TRUE) - (IQR(temp[,5], na.rm=TRUE) * 1.5 )
+  #get the ids using which
+  idx <- which(temp[,5] < min | temp[,5] > max)
+  #replace outliers with NA
+  temp[idx,5] <- NA
+  #append to the outlier-removed data frame
+  XC221.no.outlier <- rbind(XC221.no.outlier,temp)
+}
+
+#plot for gH2AX foci
+XC221gH2AX<-XC221.no.outlier[XC221.no.outlier$antibody == "gH2AX",]
+a<-ggplot(XC221gH2AX,aes(x = IR,y = XC221gH2AX$`Count Big`,color = AgNP)) +
+  ylab("gH2AX foci/cell") +
+  scale_x_discrete(labels = c("No IR", "0.5 Gy", "2 Gy")) +
+  scale_color_discrete(labels = c("No AgNP","1 ug/ml AgNP",
+                                "10 ug/ml AgNP")) +
+  geom_boxplot(aes(fill = time),position = position_dodge(0.75)) +
+  scale_fill_manual(values = c("#FFFFFF","#CCCCCC"),
+                    labels = c("1 h","24 h")) +
+  theme(legend.title = element_blank(),
+        legend.position = c(0.1,0.8),
+        panel.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.background = element_rect(color = "black"),
+        axis.text.x = element_text(color = "Black", 
+                                   size = 10),
+        axis.text.y = element_text(color = "Black", 
+                                   size = 10),
+        axis.title.y = element_text(size = 10),
+        axis.title.x = element_blank()) +
+  stat_summary(fun.y = mean, geom = "point", shape = 18,aes(fill = time),
+               size = 5,position = position_dodge(0.75))
+a
+
+#plot for 53BP1 foci
+XC22153BP1<-XC221.no.outlier[XC221.no.outlier$antibody == "53BP1",]
+b<-ggplot(XC22153BP1,aes(x = IR,y = XC22153BP1$`Count Big`,color = AgNP)) +
+  geom_boxplot(aes(fill = time),position = position_dodge(0.75)) +
+  ylab("53BP1 foci/cell") +
+  scale_x_discrete(labels = c("No IR", "0.5 Gy", "2 Gy")) +
+  scale_color_discrete(labels = c("No AgNP","1 ug/ml AgNP",
+                                "10 ug/ml AgNP")) +
+  scale_fill_manual(values = c("#FFFFFF","#CCCCCC"),
+                    labels = c("1 h","24 h")) + 
+  theme(legend.title = element_blank(),
+        legend.position = c(0.1,0.8),
+        panel.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.background = element_rect(color = "black"),
+        axis.text.x = element_text(color = "Black", 
+                                   size = 10),
+        axis.text.y = element_text(color = "Black", 
+                                   size = 10),
+        axis.title.y = element_text(size = 10),
+        axis.title.x = element_blank()) +
+  stat_summary(fun.y = mean, geom = "point", shape = 18,aes(fill = time),
+               size = 5,position = position_dodge(0.75))
+b
+
+#plot for 53BP1 foci, use facet_wrap this time
+#create labels for facet_wrap labels
+labels <- c("1" = "1 h","24" = "24 h")
+XC22153BP1 <- XC221.no.outlier[XC221.no.outlier$antibody == "53BP1",]
+c <- ggplot(XC22153BP1,aes(x = IR, y = `Count Big`,color = AgNP)) +
+  facet_wrap(~time, labeller = labeller(time = labels)) +
+  geom_boxplot(position = position_dodge(0.75)) +
+  ylab("53BP1 foci/cell") +
+  scale_x_discrete(labels = c("No IR", "0.5 Gy", "2 Gy")) +
+  scale_color_discrete(labels = c("No AgNP","1 ug/ml AgNP",
+                                "10 ug/ml AgNP")) +
+  scale_fill_discrete(guide = FALSE) +
+  theme(legend.title = element_blank(),
+        legend.position = c(1,1),
+        legend.justification = c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.line = element_line(colour = "black"),
+        legend.background = element_rect(color = "black"),
+        axis.text.x = element_text(color = "Black", 
+                                   size = 10),
+        axis.text.y = element_text(color = "Black", 
+                                   size = 10),
+        axis.title.y = element_text(size = 10),
+        axis.title.x = element_blank()) +
+  stat_summary(fun.y = mean, geom = "point", shape = 18,aes(fill = time),
+               size = 5,position = position_dodge(0.75))
+c
