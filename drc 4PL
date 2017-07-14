@@ -1,0 +1,70 @@
+library(drc)
+library(ggplot2)
+getwd()
+setwd("C:\\Users\\xichen\\Documents\\R")
+
+data <- read.table("Book2.txt",header=TRUE)
+
+#fit in a 4 parameter logistic model with set lower and upper limits
+model <- drm(surviving.fraction ~ dose,cell.line,
+                fct = LL.4(names = c("Slope", "Lower", "Upper", "ED50")),
+                data = data,
+                ##  common lower and upper limits
+                pmodels = data.frame(cell.line, 1, 1, cell.line),
+                ##  set lower and upper limits
+                lowerl = c(NA,0,NA,NA),
+                upperl = c(NA,NA,1,NA))
+
+#In this case we don't want to do that. Run another model.
+model2<- drm(surviving.fraction ~ dose,cell.line,
+             fct = LL.4(names = c("Slope", "Lower", "Upper", "ED50")),
+             data = data)
+plot(model2)
+summary(model2)
+modelFit(model)
+anova(model, model2)
+ED(model2, c(5, 10, 50), interval = "delta")
+
+# new dose levels as support for the line
+newdata <- data.frame(dose = rep(exp(seq(log(0.00001), log(10), length = 100)),2),
+                      cell.line = rep(c("SCC61","rSCC61"),each = 100))
+
+# predictions and confidence intervals
+pm <- predict(model2, newdata=newdata, interval = "confidence")
+
+# new data with predictions
+newdata$prediction <- pm[,1]
+newdata$prediction.lower <- pm[,2]
+newdata$prediction.upper <- pm[,3]
+
+#ggplot with confidence intervals
+ggplot(data, aes(x = dose, y = surviving.fraction,shape = cell.line)) +
+  geom_point() +
+  geom_ribbon(data = newdata, aes(x = dose, y = prediction,
+                                ymin = prediction.lower,
+                                ymax = prediction.upper), 
+              alpha = 0.2) +
+  geom_line(data = newdata, aes(x = dose, y = prediction)) +
+  xlab("CB83 (uM)") + ylab("Surviving fraction") +
+  theme(legend.title=element_blank())
+
+## no confidence intervals
+p<-ggplot(data, aes(x = dose, 
+                    y = surviving.fraction,
+                    shape = cell.line))+
+ geom_point(size = I(3)) +
+  geom_line(data = newdata, aes(x = dose, y = prediction)) +
+    xlab("CB83 (uM)") + ylab("Surviving fraction")
+  
+p+theme(legend.position = c(1,1),
+  legend.justification = c(1,1),
+  legend.title = element_blank(),
+  #remove legend background
+  legend.background = element_rect(color = "black"),
+  #remove panel background and grid
+  panel.grid.major = element_blank(), 
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(), 
+  axis.line = element_line(colour = "black"))
+
+#axis transformation#  scale_y_log10() 
