@@ -1,3 +1,6 @@
+library(readxl)
+library(GGally)
+library(ggplot2)
 data<- read_excel("C:/Chen/Erlotinib/Erlotinib_Plasma_MayResultsTable_R.xlsx")
 
 #rename columns
@@ -6,19 +9,19 @@ colnames(data)<-c("Patient","OSI","Erlotinib","OtoE","FreeCholB","FreeCholA",
                   "Oxy27OHB","Oxy27OHA","Oxy7aOH27OHB","Oxy7aOH27OHA","Oxy7KetoB",
                   "Oxy7KetoA","Oxy25OHB","Oxy25OHA","Oxy24OHB","Oxy24OHA","Oxy7aOH25OHCholB",
                   "Oxy7aOH25OHCholA","Oxy7aOHB","Oxy7aOHA","Oxy7bOHB","Oxy7bOHA","CysRtoOB",
-                  "CysRtoOA","GSHRtoOB","GSHRtoOA","TumorDecrease")
-
-#remove NAs
-data<-data[-c(17:53),-33]
+                  "CysRtoOA","GSHRtoOB","GSHRtoOA","TumorDecrease","BuccalTotalCholA",
+                  "BuccalTotalCholB","BuccalFreeCholA","BuccalFreeCholB","BuccalBoundCholA",
+                  "BuccalBoundCholB")
 
 #create factor column for DoseofE
 data$DoseFactor<-factor(data$DoseofE, labels = c("low dose","high dose"))
 
 #Erlotinib group vs tumor
-a<-ggpairs(data, columns = c(2:4,32),switch = "both",
+a<-ggpairs(data, columns = c("OSI","Erlotinib","OtoE","TumorDecrease"),
+           switch = "both", #switch labels to bottom and left
            mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("OSI-420","Erlotinib","OSI-420/Erlotinib Ratio",
                         "Tumor decrease"))
@@ -30,95 +33,118 @@ OtoEnew<-data$OtoE
 OSInew[which(OSInew<5)]<-NA
 OtoEnew[is.na(OSInew)]<-NA
 data<-cbind(data,OSInew,OtoEnew)
-ggpairs(data, columns = c(34,3,35,32),switch = "both",
+ggpairs(data, columns = c("OSInew","Erlotinib","OtoEnew","TumorDecrease"),switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("OSI-420","Erlotinib","OSI-420/Erlotinib Ratio",
                          "Tumor decrease"))
 
 #Cholesterol group (before) vs tumor
-ggpairs(data, columns = c(5,7,9,32),switch = "both",
+ggpairs(data, columns = c("FreeCholB","TotalCholB","BoundCholB","TumorDecrease"),
+        switch = "both",
         mapping = aes(color = DoseFactor),
-        upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        upper = list(continuous = wrap("cor",size = 4, hjust = 1)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("Free cholesterol","Total cholesterol","Bound cholesterol",
                          "Tumor decrease"))
 
 #Cholesterol group (after) vs tumor
-ggpairs(data, columns = c(6,8,10,32),switch = "both",
+ggpairs(data, columns = c("FreeCholA","TotalCholA","BoundCholA","TumorDecrease"),
+        switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("Free cholesterol","Total cholesterol","Bound cholesterol",
                          "Tumor decrease"))
 
 #Oxysterol group (before) vs tumor
-ggpairs(data, columns = c(12,14,24,32),switch = "both",
+ggpairs(data, columns = c("Oxy27OHB","Oxy7aOH27OHB","Oxy7aOHB","TumorDecrease"),switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("27-OH","7a-OH-27-OH","7a-OH",
                          "Tumor decrease"))
 
 #Oxysterol group (after) vs tumor
-ggpairs(data, columns = c(13,15,25,32),switch = "both",
+ggpairs(data, columns = c("Oxy27OHA","Oxy7aOH27OHA","Oxy7aOHA","TumorDecrease"),switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("27-OH","7a-OH-27-OH","7a-OH",
                          "Tumor decrease"))
 
 #Redox pairs (before) vs tumor
-ggpairs(data, columns = c(28,30,32),switch = "both",
+ggpairs(data, columns = c("CysRtoOB","GSHRtoOB","TumorDecrease"),switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("Cys+MSBT/Cystine","GSH+MSBT/GSSG",
                          "Tumor decrease"))
 
 #Redox pairs (after) vs tumor
-ggpairs(data, columns = c(29,31,32),switch = "both",
+ggpairs(data, columns = c("CysRtoOA","GSHRtoOA","TumorDecrease"),switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("Cys+MSBT/Cystine","GSH+MSBT/GSSG",
                          "Tumor decrease"))
 
 #only look at Cys pairs vs DoseFactor (which is determined by smoking)
-ggplot(data, aes(x = DoseFactor,y = CysRtoOB)) +
-  geom_point(size = 5) + geom_boxplot(alpha = 0.5) +
-  ylab("Cys+MSBT/Cystine (before treatment)") +
+ggplot(data, aes(x=DoseFactor,y=CysRtoOB))+
+  geom_point(size = 5)+geom_boxplot(alpha=0.5)+
+  ylab("Cys+MSBT/Cystine (before treatment)")+
   theme(panel.background = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.grid.major = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
         axis.line = element_line(colour = "black"),
-        axis.text.x = element_text(color = "Black", 
-                                   size = 18),
-        axis.text.y = element_text(color = "Black", 
-                                   size = 12),
-        axis.title.y = element_text(size = 18),
-        axis.title.x = element_blank())
-ggplot(data, aes(x = DoseFactor,y = CysRtoOA))+
-  geom_point(size = 5) + geom_boxplot(alpha = 0.5) +
-  ylab("Cys+MSBT/Cystine (after treatment)") +
+        axis.text.x = element_text(color="Black", 
+                                   size=18),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_blank())
+ggplot(data, aes(x=DoseFactor,y=CysRtoOA))+
+  geom_point(size = 5)+geom_boxplot(alpha=0.5)+
+  ylab("Cys+MSBT/Cystine (after treatment)")+
   theme(panel.background = element_blank(),
-        panel.grid.minot = element_blank(),
-        panel.grid.major = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
         axis.line = element_line(colour = "black"),
-        axis.text.x = element_text(color = "Black", 
-                                   size = 18),
-        axis.text.y = element_text(color = "Black", 
-                                   size = 12),
-        axis.title.y = element_text(size = 18),
-        axis.title.x = element_blank())
+        axis.text.x = element_text(color="Black", 
+                                   size=18),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_blank())
+
+# are Cys redox values normally distributed?
+plot(density(data$CysRtoOB))
+plot(density(data$CysRtoOA))
+qqnorm(data$CysRtoOB)
+qqnorm(data$CysRtoOA)
+shapiro.test(data$CysRtoOB)
+shapiro.test(data$CysRtoOA)
+#Assume normality
+
+# t-test for Cys redox values between high/low dose groups
+low_dose_pre = unlist(data[data$DoseFactor == "low dose",28])
+low_dose_post = unlist(data[data$DoseFactor == "low dose",29])
+high_dose_pre = unlist(data[data$DoseFactor == "high dose",28])
+high_dose_post = unlist(data[data$DoseFactor == "high dose",29])
+t.test(low_dose_pre,high_dose_pre)
+t.test(low_dose_post,high_dose_post)
+
+#Mann-Whitney test
+wilcox.test(low_dose_pre,high_dose_pre)
+wilcox.test(low_dose_post,high_dose_post)
 
 #Remove some low GSSG peaks
 GSHRtoOBnew<-data$GSHRtoOB
@@ -128,56 +154,114 @@ GSHRtoOAnew[c(3,16)]<-NA
 data<-cbind(data,GSHRtoOBnew,GSHRtoOAnew)
 
 #plot redox pairs again
-ggpairs(data, columns = c(28,36,32),switch = "both",
+ggpairs(data, columns = c("CysRtoOB","GSHRtoOBnew","TumorDecrease"),switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("Cys+MSBT/Cystine","GSH+MSBT/GSSG",
                          "Tumor decrease"))
-ggpairs(data, columns = c(29,37,32),switch = "both",
+ggpairs(data, columns = c("CysRtoOA","GSHRtoOAnew","TumorDecrease"),switch = "both",
         mapping = aes(color = DoseFactor),
         upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
-        lower = list(continuous = wrap("points",size = 4)),
+        lower=list(continuous = wrap("points",size= 4)),
         diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
         columnLabels = c("Cys+MSBT/Cystine","GSH+MSBT/GSSG",
                          "Tumor decrease"))
 
+#redox pairs vs cholesterol (before)
+ggpairs(data, columns = c("FreeCholB","TotalCholB","BoundCholB","CysRtoOB","GSHRtoOBnew"),
+        switch = "both",
+        mapping = aes(color = DoseFactor),
+        upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
+        lower=list(continuous = wrap("points",size= 4)),
+        diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
+        columnLabels = c("Free cholesterol","Total cholesterol","Bound cholesterol",
+                         "Cys+MSBT/Cystine","GSH+MSBT/GSSG"))
+
+#redox pairs vs cholesterol (after)
+ggpairs(data, columns = c("FreeCholA","TotalCholA","BoundCholA","CysRtoOA","GSHRtoOAnew"),switch = "both",
+        mapping = aes(color = DoseFactor),
+        upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
+        lower=list(continuous = wrap("points",size= 4)),
+        diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
+        columnLabels = c("Free cholesterol","Total cholesterol","Bound cholesterol",
+                         "Cys+MSBT/Cystine","GSH+MSBT/GSSG"))
+
+#redox pairs vs erlotinib
+ggpairs(data, columns = c("OSInew","Erlotinib","OtoEnew","CysRtoOB","GSHRtoOBnew"),switch = "both",
+        mapping = aes(color = DoseFactor),
+        upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
+        lower=list(continuous = wrap("points",size= 4)),
+        diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
+        columnLabels = c("OSI-420","Erlotinib","OSI-420/Erlotinib Ratio",
+                         "Cys+MSBT/Cystine","GSH+MSBT/GSSG"))
+
+#cholesterol vs erlotinib
+ggpairs(data, columns = c("OSInew","Erlotinib","OtoEnew","FreeCholB","TotalCholB","BoundCholB"),switch = "both",
+        mapping = aes(color = DoseFactor),
+        upper = list(continuous = wrap("cor",size = 5, hjust = 1)),
+        lower=list(continuous = wrap("points",size= 4)),
+        diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
+        columnLabels = c("OSI-420","Erlotinib","OSI-420/Erlotinib Ratio",
+                         "Free cholesterol","Total cholesterol","Bound cholesterol"))
+
 #only look at Erlotinib vs TumorDecrease
 a[4,2]+xlab(expression(paste("Erlotinib (pg/",mu,"L of plasma)")))+
   ylab("Percentage of tumor decrease")+
-  theme(legend.title = element_blank(),
+  theme(legend.title=element_blank(),
         legend.text = element_text(size = 18),
-        legend.position = c(0.2,0.9),
+        legend.position=c(0.2,0.9),
         panel.background = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.grid.major = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
         axis.line = element_line(colour = "black"),
         legend.background = element_rect(color = "black"),
-        axis.text.x = element_text(color = "Black", 
-                                   size = 12),
-        axis.text.y = element_text(color = "Black", 
-                                   size = 12),
-        axis.title.y = element_text(size = 18),
-        axis.title.x = element_text(size = 18))
+        axis.text.x = element_text(color="Black", 
+                                   size=12),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#to get p-values, use cor.test
+cor.test(data$Erlotinib,data$TumorDecrease)
+data_high_dose<-data[data$DoseofE == 300,]
+data_low_dose<-data[data$DoseofE == 150,]
+cor.test(data_high_dose$Erlotinib,data_high_dose$TumorDecrease)
+cor.test(data_low_dose$Erlotinib,data_low_dose$TumorDecrease)
   
 #Discretize Erlotinib concentration
 data$ErlotinibFactor[data$Erlotinib<2000]<-"low Erl"
 data$ErlotinibFactor[data$Erlotinib>2000]<-"high Erl"
-ggplot(data, aes(x = ErlotinibFactor,y = TumorDecrease)) +
-  geom_point(size = 5) + geom_boxplot(alpha = 0.5) +
+ggplot(data, aes(x=ErlotinibFactor,y=TumorDecrease))+
+  geom_point(size = 5)+geom_boxplot(alpha=0.5)+
   ylab("Percentage of tumor decrease")+
   scale_x_discrete(limits = c("low Erl","high Erl"))+
   theme(panel.background = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.grid.major = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
         axis.line = element_line(colour = "black"),
-        axis.text.x = element_text(color = "Black", 
-                                   size = 18),
-        axis.text.y = element_text(color = "Black", 
-                                   size = 12),
-        axis.title.y = element_text(size = 18),
-        axis.title.x = element_blank())
+        axis.text.x = element_text(color="Black", 
+                                   size=18),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_blank())
+
+# is tumor decrease normally distributed?
+plot(density(data$TumorDecrease))
+qqnorm(data$TumorDecrease)
+shapiro.test(data$TumorDecrease)
+#p = 0.3661 fail to reject null hypothesis that TumorDecrease is normal
+
+# t-test for TumorDecrease between high/low Erl groups
+lowErl = unlist(data[data$ErlotinibFactor == "low Erl",32])
+highErl = unlist(data[data$ErlotinibFactor == "high Erl",32])
+t.test(lowErl,highErl)
+
+#Mann-Whitney test
+wilcox.test(lowErl,highErl)
 
 #Discretize TotalCholB concentration
 data$TotalCholFactor[data$TotalCholB<15]<-"low Chol"
@@ -187,3 +271,262 @@ data$TotalCholFactor[data$TotalCholB>15]<-"high Chol"
 data$CysFactor[data$CysRtoOB<200]<-"Red Cys low"
 data$CysFactor[data$CysRtoOB>200]<-"Red Cys high"
 
+#tumor response vs total cholesterol (before)
+ggplot(data, aes(x=TotalCholB, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab(expression(paste("Total cholesterol (pg/",mu,"L of plasma)"))) +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(1,1),
+        legend.justification=c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=12),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs bound cholesterol (before)
+ggplot(data, aes(x=BoundCholB, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab(expression(paste("Bound cholesterol (pg/",mu,"L of plasma)"))) +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(1,1),
+        legend.justification=c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=12),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs free cholesterol (before)
+ggplot(data, aes(x=FreeCholB, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab(expression(paste("Free cholesterol (pg/",mu,"L of plasma)"))) +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(1,1),
+        legend.justification=c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=12),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs total cholesterol (after)
+ggplot(data, aes(x=TotalCholA, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab(expression(paste("Total cholesterol (pg/",mu,"L of plasma)"))) +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(0.9,0.9),
+        legend.justification=c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", 
+                                   size=12),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs bound cholesterol (after)
+ggplot(data, aes(x=BoundCholA, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab(expression(paste("Bound cholesterol (pg/",mu,"L of plasma)"))) +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(0.9,0.9),
+        legend.justification=c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", 
+                                   size=12),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs 7a-OH-27-OH (before)
+ggplot(data, aes(x=Oxy7aOH27OHB, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab(expression(paste("7",alpha,"-OH-27-OH (pg/",mu,"L of plasma)"))) +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(0.05,1),
+        legend.justification=c(0,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", 
+                                   size=12),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs 7a-OH-27-OH (after)
+ggplot(data, aes(x=Oxy7aOH27OHA, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab(expression(paste("7",alpha,"-OH-27-OH (pg/",mu,"L of plasma)"))) +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(0.05,1),
+        legend.justification=c(0,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", 
+                                   size=12),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs GSH+MSBT/GSSG (after)
+ggplot(data, aes(x=GSHRtoOAnew, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab("GSH+MSBT/GSSG") +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(1,1),
+        legend.justification=c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", 
+                                   size=12),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#Buccal cholesterol (before) vs tumor
+ggpairs(data, columns = c("BuccalFreeCholB","BuccalTotalCholB","BuccalBoundCholB","TumorDecrease"),
+        switch = "both",mapping = aes(color = DoseFactor),
+        upper = list(continuous = wrap("cor",size = 4, hjust = 1)),
+        lower=list(continuous = wrap("points",size= 4)),
+        diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
+        columnLabels = c("Free cholesterol","Total cholesterol","Bound cholesterol",
+                         "Tumor decrease"))
+
+#Buccal cholesterol (after) vs tumor
+ggpairs(data, columns = c("BuccalFreeCholA","BuccalTotalCholA","BuccalBoundCholA","TumorDecrease"),
+        switch = "both",mapping = aes(color = DoseFactor),
+        upper = list(continuous = wrap("cor",size = 4, hjust = 1)),
+        lower=list(continuous = wrap("points",size= 4)),
+        diag = list(continuous = wrap("densityDiag",alpha = 0.5)),
+        columnLabels = c("Free cholesterol","Total cholesterol","Bound cholesterol",
+                         "Tumor decrease"))
+
+#tumor response vs buccal total cholesterol (after)
+ggplot(data, aes(x=BuccalTotalCholB, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab("Buccal total cholesterol/total phosphorous") +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(0.05,1),
+        legend.justification=c(0,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", 
+                                   size=12),
+        axis.text.y = element_text(color="Black", 
+                                   size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs buccal free cholesterol (after)
+ggplot(data, aes(x=BuccalFreeCholB, y=TumorDecrease, color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab("Buccal free cholesterol/total phosphorous") +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(1,1),
+        legend.justification=c(1,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=12),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#tumor response vs buccal bound cholesterol (after)
+ggplot(data, aes(x=BuccalBoundCholB, y=TumorDecrease,color=DoseFactor))+
+  geom_point(size = 5)+
+  ylab("Percentage of tumor decrease")+
+  xlab("Buccal bound cholesterol/total phosphorous") +
+  theme(legend.title=element_blank(),
+        legend.text = element_text(size = 12),
+        legend.position=c(0.05,1),
+        legend.justification=c(0,1),
+        panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=12),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=18),
+        axis.title.x=element_text(size=18))
+
+#plot for each patients the plasma cholesterol (free, bound, and total) 
+#before and after treatment with Erlotinib
+#subset plasma cholesterol data, melt it from wide to long
+library(reshape2)
+data_pchol_wide<-data[,c(1,5:10)]
+data_pchol_long<-melt(data_pchol_wide, id.vars=c("Patient"))
+
+data_pchol_long$time<-NA #creating a new column for time
+data_pchol_long$time[grep("B$",data_pchol_long$variable)]<-"Before" #anything that ends with B means before treatment
+data_pchol_long$time[grep("A$",data_pchol_long$variable)]<-"After"
+
+data_pchol_long$cholesterol<-NA #creating a new column for cholesterol type
+data_pchol_long$cholesterol[grep("Free",data_pchol_long$variable)]<-"Free"
+data_pchol_long$cholesterol[grep("Bound",data_pchol_long$variable)]<-"Bound" 
+data_pchol_long$cholesterol[grep("Total",data_pchol_long$variable)]<-"Total" 
+
+ggplot(data_pchol_long,aes(x=time,y=value))+
+  geom_line(aes(group=Patient,color=as.character(Patient)),size=1)+
+  facet_grid(.~cholesterol)+labs(color = "Patient")+
+  scale_x_discrete(limits=c("Before","After"))+ #changing the order of a discrete x scale
+  ylab(expression(paste("Cholesterol (",mu,"g/",mu,"L of plasma)")))+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),#axis line
+        legend.background = element_rect(color = "black"),#legend border
+        axis.text.x = element_text(color="Black", size=10),
+        axis.text.y = element_text(color="Black", angle = 90,hjust=0.5,
+                                   size=10),
+        axis.title.y=element_text(size=10),
+        axis.title.x = element_blank())
