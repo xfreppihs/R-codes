@@ -1,0 +1,211 @@
+library(readxl)
+library(ggplot2)
+library(reshape2)
+data<- read_excel("F:/Kylie/Kylie blood preservative.xlsx")
+#melt data from wide to long
+data = melt(data, 
+     #all the variables to keep but not split apart on
+     id.vars = c("ID","Radiation_Group","Birth","Radiation","Gy"),
+     # The source columns
+     measure.vars = c("A","B","C","D"),
+     # Name of the destination column that will identify the original column that the measurement came from
+     variable.name = "Method", value.name = "Ratio")
+
+#color by Radiation_Group
+ggplot(data, aes(x=Method,y=Ratio,group = ID, color = Radiation_Group))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+data1<-data[data$Method=="A"|data$Method=="B",]
+data2<-data[data$Method=="C"|data$Method=="D",]
+ggplot(data1, aes(x=Method,y=Ratio,group = ID, color = Radiation_Group))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+
+#color by Radiation
+ggplot(data1, aes(x=Method,y=Ratio,group = ID, color = Radiation))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+
+#Discretize radiation dose
+data$Dose[data$Gy==0]<-"0"
+data$Dose[data$Gy<=6.5 & data$Gy >0]<-"<=6.5 Gy"
+data$Dose[data$Gy>6.5]<-">6.5 Gy"
+
+#color by Dose
+ggplot(data, aes(x=Method,y=Ratio,group = ID, color = Dose))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  scale_colour_discrete(name  ="Radiation dose")+ # change the title of the legend
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+
+#age function to calculate current age from Birth date
+age <- function(from, to) {
+  from_lt = as.POSIXlt(from)
+  to_lt = as.POSIXlt(to)
+  
+  age = to_lt$year - from_lt$year
+  
+  ifelse(to_lt$mon < from_lt$mon |
+           (to_lt$mon == from_lt$mon & to_lt$mday < from_lt$mday),
+         age - 1, age)
+}
+
+data$Age<-age(from = data$Birth, to = as.POSIXlt(Sys.Date()))
+
+#Discretize age
+hist(data$Age)
+data$AgeFactor[data$Age<10]<-"Age<10"
+data$AgeFactor[data$Age>=10]<-"Age>=10"
+
+ggplot(data, aes(x=Method,y=Ratio,group = ID, color = AgeFactor))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+
+ggplot(data, aes(x=Method,y=Ratio,group = ID, linetype = AgeFactor,color=Dose))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+
+ggplot(data1, aes(x=Method,y=Ratio,group = ID, linetype = AgeFactor,color=Radiation_Group))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+
+#subsetting RADCTL group, seems like in this group higher age means higher ratio
+data3<-data[data$Radiation_Group=="RADCTL",]
+ggplot(data3, aes(x=Method,y=Ratio,group = ID, linetype = AgeFactor))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+#look at A,B and C,D separately for a finer view
+data4<-data[intersect(rownames(data1),rownames(data3)),]
+data5<-data[intersect(rownames(data2),rownames(data3)),]
+ggplot(data4, aes(x=Method,y=Ratio,group = ID, linetype = AgeFactor))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.01,1))
+ggplot(data5, aes(x=Method,y=Ratio,group = ID, linetype = AgeFactor))+
+  geom_point(size = 2)+
+  geom_line(size = 1)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),
+        axis.text.x = element_text(color="Black", size=14),
+        axis.text.y = element_text(color="Black", size=12),
+        axis.title.y=element_text(size=14),
+        axis.title.x=element_blank(),
+        legend.title=element_blank(),
+        legend.justification=c(0,1), legend.position=c(0.1,1))
+
+# t-test for Cys ratios between old/young RADCLT groups
+A_Young = unlist(data3[data3$AgeFactor == "Age<10"&data3$Method=="A",7])
+A_Old = unlist(data3[data3$AgeFactor == "Age>=10"&data3$Method=="A",7])
+B_Young = unlist(data3[data3$AgeFactor == "Age<10"&data3$Method=="B",7])
+B_Old = unlist(data3[data3$AgeFactor == "Age>=10"&data3$Method=="B",7])
+C_Young = unlist(data3[data3$AgeFactor == "Age<10"&data3$Method=="C",7])
+C_Old = unlist(data3[data3$AgeFactor == "Age>=10"&data3$Method=="C",7])
+D_Young = unlist(data3[data3$AgeFactor == "Age<10"&data3$Method=="D",7])
+D_Old = unlist(data3[data3$AgeFactor == "Age>=10"&data3$Method=="D",7])
+t.test(A_Young,A_Old)
+t.test(B_Young,B_Old)
+t.test(C_Young,C_Old)
+t.test(D_Young,D_Old)
+
+#look at Ratio over Age, mapped by Method
+ggplot(data, aes(x=Age,y=Ratio,color=Radiation_Group))+
+  geom_point(size = 2)+
+  ylab("Ratio (Cystine nM/Cys-MSBT nM)")
