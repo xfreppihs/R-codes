@@ -1,0 +1,44 @@
+library(readxl)
+library(ggplot2)
+data <- read_excel("C:/Chen/animal/B10-B74/B10-B74_R.xlsx")
+
+data$cell_line<-factor(data$cell_line,levels=c("SCC61","rSCC61"))#reorder the factor levels
+a<-ggplot(data, aes(x=volume))+
+  geom_histogram(aes(y=..density..),binwidth = 50,fill="white",color="black")+
+  geom_density(alpha=0.2,fill="pink",size = 1)+
+  facet_grid(cell_line ~.)+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),#axis line
+        axis.text.x = element_text(size=12,color="black"),
+        axis.text.y = element_text(angle = 0,size=12,color="black"),
+        axis.title.y=element_text(size=12),
+        axis.title.x=element_text(size=12),
+        strip.text.y=element_text(size=12)) #facet grid labeller size)
+
+# Find the mean of each cell line
+library(plyr)
+mdata <- ddply(data, "cell_line", summarise, volume.mean=mean(volume))
+mdata
+a+geom_vline(data=mdata,aes(xintercept=volume.mean),
+             linetype="dashed",size=2,color="red")
+
+#dot plot for each group
+data$group=factor(data$group)
+ggplot(data,aes(x=group,y=volume,fill=cell_line))+
+  geom_dotplot(position=position_dodge(0.4),binaxis = 'y',stackdir='center')+
+  scale_x_discrete(labels=c("1"="5 min","2"="30 min","3"="60 min","4"="90 min","5"="120 min"))+
+  ylab("volume (mm3)")+
+  theme(panel.background = element_blank(),
+        panel.grid.minor=element_blank(),
+        panel.grid.major=element_blank(),
+        axis.line = element_line(colour = "black"),#axis line
+        axis.text.x = element_text(size=12,color="black"),
+        axis.text.y = element_text(angle = 0,size=12,color="black"),
+        axis.title.y=element_text(size=12),
+        axis.title.x=element_text(size=12),
+        legend.title=element_blank(),
+        legend.text=element_text(size=12),
+        legend.justification=c(1,1),
+        legend.position=c(1,1))
