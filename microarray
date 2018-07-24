@@ -1,0 +1,1164 @@
+library(lumi)
+library(lumiHumanIDMapping)
+library(limma)
+library(lumiHumanAll.db)
+library(annotate)
+library(GO.db)
+
+# load data
+data = lumiR('Furdui_GEX_02202014_Final Report.txt',lib.mapping='lumiHumanIDMapping')
+
+# run vst variance stabilization, quantile normalization, quality control
+data.N.Q = lumiExpresso(data)
+
+# sample clustering
+png('sample_cluster_dendrogram.png')
+plot(data.N.Q, what='sampleRelation')
+dev.off()
+
+png('sample_cluster_pca.png')
+plot(data.N.Q, what='sampleRelation',method='mds')
+dev.off()
+
+# extract expression values
+dataMatrix = exprs(data.N.Q)
+
+# remove unexpressed genes
+presentCount = detectionCall(data)
+selDataMatrix = dataMatrix[presentCount > 0,]
+
+# list of all genes
+allgenes_entrez = nuID2RefSeqID(rownames(selDataMatrix),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+allgenes_entrez = sort(unique(allgenes_entrez[allgenes_entrez != ""]))
+allgenes_symbol = getSYMBOL(allgenes_entrez,data='org.Hs.eg')
+allgenes_symbol[is.na(allgenes_symbol)] = '-'
+
+# sample and time values
+samples = c('scc0','scc0','scc0','scc6','scc6','scc6','scc12','scc12','scc12','scc24','scc24','scc24','rscc0','rscc0','rscc0','rscc6','rscc6','rscc6','rscc12','rscc12','rscc12','rscc24','rscc24','rscc24')
+levels = c('scc0','scc6','scc12','scc24','rscc0','rscc6','rscc12','rscc24')
+f = factor(samples, levels=levels)
+
+# determine differentially expressed genes
+design = model.matrix(~0+f)
+colnames(design) = levels
+fit = lmFit(selDataMatrix,design)
+
+# R0_S0
+R0_S0 = c()
+R0_S0_padj = c()
+R0_S0_logFC = c()
+contrast = makeContrasts('rscc0-scc0',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R0_S0[length(R0_S0)+1] = 'DOWN'
+    R0_S0_padj[length(R0_S0_padj)+1] = min(sig_down_adjpval)
+    R0_S0_logFC[length(R0_S0_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R0_S0[length(R0_S0)+1] = 'UP'
+    R0_S0_padj[length(R0_S0_padj)+1] = min(sig_up_adjpval)
+    R0_S0_logFC[length(R0_S0_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R0_S0[length(R0_S0)+1] = 'NOCHANGE'
+    R0_S0_padj[length(R0_S0_padj)+1] = '-'
+    R0_S0_logFC[length(R0_S0_logFC)+1] = '-'
+  }
+}
+R0_S0_geo = goana(allgenes_entrez[R0_S0 == 'UP' | R0_S0 == 'DOWN'],universe=allgenes_entrez)
+R0_S0_geo = topGO(R0_S0_geo,number=nrow(R0_S0_geo))
+R0_S0_geo[,'P.ADJ.DE'] = p.adjust(R0_S0_geo$P.DE,'fdr')
+R0_S0_kegg = kegga(allgenes_entrez[R0_S0 == 'UP' | R0_S0 == 'DOWN'],universe=allgenes_entrez)
+R0_S0_kegg = topKEGG(R0_S0_kegg,number=nrow(R0_S0_kegg))
+R0_S0_kegg[,'P.ADJ.DE'] = p.adjust(R0_S0_kegg$P.DE,'fdr')
+
+# R24_S24
+R24_S24 = c()
+R24_S24_padj = c()
+R24_S24_logFC = c()
+contrast = makeContrasts('rscc24-scc24',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R24_S24[length(R24_S24)+1] = 'DOWN'
+    R24_S24_padj[length(R24_S24_padj)+1] = min(sig_down_adjpval)
+    R24_S24_logFC[length(R24_S24_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R24_S24[length(R24_S24)+1] = 'UP'
+    R24_S24_padj[length(R24_S24_padj)+1] = min(sig_up_adjpval)
+    R24_S24_logFC[length(R24_S24_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R24_S24[length(R24_S24)+1] = 'NOCHANGE'
+    R24_S24_padj[length(R24_S24_padj)+1] = '-'
+    R24_S24_logFC[length(R24_S24_logFC)+1] = '-'
+  }
+}
+R24_S24_geo = goana(allgenes_entrez[R24_S24 == 'UP' | R24_S24 == 'DOWN'],universe=allgenes_entrez)
+R24_S24_geo = topGO(R24_S24_geo,number=nrow(R24_S24_geo))
+R24_S24_geo[,'P.ADJ.DE'] = p.adjust(R24_S24_geo$P.DE,'fdr')
+R24_S24_kegg = kegga(allgenes_entrez[R24_S24 == 'UP' | R24_S24 == 'DOWN'],universe=allgenes_entrez)
+R24_S24_kegg = topKEGG(R24_S24_kegg,number=nrow(R24_S24_kegg))
+R24_S24_kegg[,'P.ADJ.DE'] = p.adjust(R24_S24_kegg$P.DE,'fdr')
+
+# S24_S0
+S24_S0 = c()
+S24_S0_padj = c()
+S24_S0_logFC = c()
+contrast = makeContrasts('scc24-scc0',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    S24_S0[length(S24_S0)+1] = 'DOWN'
+    S24_S0_padj[length(S24_S0_padj)+1] = min(sig_down_adjpval)
+    S24_S0_logFC[length(S24_S0_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    S24_S0[length(S24_S0)+1] = 'UP'
+    S24_S0_padj[length(S24_S0_padj)+1] = min(sig_up_adjpval)
+    S24_S0_logFC[length(S24_S0_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    S24_S0[length(S24_S0)+1] = 'NOCHANGE'
+    S24_S0_padj[length(S24_S0_padj)+1] = '-'
+    S24_S0_logFC[length(S24_S0_logFC)+1] = '-'
+  }
+}
+S24_S0_geo = goana(allgenes_entrez[S24_S0 == 'UP' | S24_S0 == 'DOWN'],universe=allgenes_entrez)
+S24_S0_geo = topGO(S24_S0_geo,number=nrow(S24_S0_geo))
+S24_S0_geo[,'P.ADJ.DE'] = p.adjust(S24_S0_geo$P.DE,'fdr')
+S24_S0_kegg = kegga(allgenes_entrez[S24_S0 == 'UP' | S24_S0 == 'DOWN'],universe=allgenes_entrez)
+S24_S0_kegg = topKEGG(S24_S0_kegg,number=nrow(S24_S0_kegg))
+S24_S0_kegg[,'P.ADJ.DE'] = p.adjust(S24_S0_kegg$P.DE,'fdr')
+
+# R24_R0
+R24_R0 = c()
+R24_R0_padj = c()
+R24_R0_logFC = c()
+contrast = makeContrasts('rscc24-rscc0',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R24_R0[length(R24_R0)+1] = 'DOWN'
+    R24_R0_padj[length(R24_R0_padj)+1] = min(sig_down_adjpval)
+    R24_R0_logFC[length(R24_R0_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R24_R0[length(R24_R0)+1] = 'UP'
+    R24_R0_padj[length(R24_R0_padj)+1] = min(sig_up_adjpval)
+    R24_R0_logFC[length(R24_R0_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R24_R0[length(R24_R0)+1] = 'NOCHANGE'
+    R24_R0_padj[length(R24_R0_padj)+1] = '-'
+    R24_R0_logFC[length(R24_R0_logFC)+1] = '-'
+  }
+}
+R24_R0_geo = goana(allgenes_entrez[R24_R0 == 'UP' | R24_R0 == 'DOWN'],universe=allgenes_entrez)
+R24_R0_geo = topGO(R24_R0_geo,number=nrow(R24_R0_geo))
+R24_R0_geo[,'P.ADJ.DE'] = p.adjust(R24_R0_geo$P.DE,'fdr')
+R24_R0_kegg = kegga(allgenes_entrez[R24_R0 == 'UP' | R24_R0 == 'DOWN'],universe=allgenes_entrez)
+R24_R0_kegg = topKEGG(R24_R0_kegg,number=nrow(R24_R0_kegg))
+R24_R0_kegg[,'P.ADJ.DE'] = p.adjust(R24_R0_kegg$P.DE,'fdr')
+
+# R24_R0 - S24_S0
+R24_R0_S24_S0 = c()
+R24_R0_S24_S0_padj = c()
+R24_R0_S24_S0_logFC = c()
+contrast = makeContrasts(diff =(rscc24-rscc0)-(scc24-scc0),levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R24_R0_S24_S0[length(R24_R0_S24_S0)+1] = 'DOWN'
+    R24_R0_S24_S0_padj[length(R24_R0_S24_S0_padj)+1] = min(sig_down_adjpval)
+    R24_R0_S24_S0_logFC[length(R24_R0_S24_S0_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R24_R0_S24_S0[length(R24_R0_S24_S0)+1] = 'UP'
+    R24_R0_S24_S0_padj[length(R24_R0_S24_S0_padj)+1] = min(sig_up_adjpval)
+    R24_R0_S24_S0_logFC[length(R24_R0_S24_S0_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R24_R0_S24_S0[length(R24_R0_S24_S0)+1] = 'NOCHANGE'
+    R24_R0_S24_S0_padj[length(R24_R0_S24_S0_padj)+1] = '-'
+    R24_R0_S24_S0_logFC[length(R24_R0_S24_S0_logFC)+1] = '-'
+  }
+}
+R24_R0_S24_S0_geo = goana(allgenes_entrez[R24_R0_S24_S0 == 'UP' | R24_R0_S24_S0 == 'DOWN'],universe=allgenes_entrez)
+R24_R0_S24_S0_geo = topGO(R24_R0_S24_S0_geo,number=nrow(R24_R0_S24_S0_geo))
+R24_R0_S24_S0_geo[,'P.ADJ.DE'] = p.adjust(R24_R0_S24_S0_geo$P.DE,'fdr')
+R24_R0_S24_S0_kegg = kegga(allgenes_entrez[R24_R0_S24_S0 == 'UP' | R24_R0_S24_S0 == 'DOWN'],universe=allgenes_entrez)
+R24_R0_S24_S0_kegg = topKEGG(R24_R0_S24_S0_kegg,number=nrow(R24_R0_S24_S0_kegg))
+R24_R0_S24_S0_kegg[,'P.ADJ.DE'] = p.adjust(R24_R0_S24_S0_kegg$P.DE,'fdr')
+
+# S6_S0
+S6_S0 = c()
+S6_S0_padj = c()
+S6_S0_logFC = c()
+contrast = makeContrasts('scc6-scc0',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    S6_S0[length(S6_S0)+1] = 'DOWN'
+    S6_S0_padj[length(S6_S0_padj)+1] = min(sig_down_adjpval)
+    S6_S0_logFC[length(S6_S0_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    S6_S0[length(S6_S0)+1] = 'UP'
+    S6_S0_padj[length(S6_S0_padj)+1] = min(sig_up_adjpval)
+    S6_S0_logFC[length(S6_S0_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    S6_S0[length(S6_S0)+1] = 'NOCHANGE'
+    S6_S0_padj[length(S6_S0_padj)+1] = '-'
+    S6_S0_logFC[length(S6_S0_logFC)+1] = '-'
+  }
+}
+S6_S0_geo = goana(allgenes_entrez[S6_S0 == 'UP' | S6_S0 == 'DOWN'],universe=allgenes_entrez)
+S6_S0_geo = topGO(S6_S0_geo,number=nrow(S6_S0_geo))
+S6_S0_geo[,'P.ADJ.DE'] = p.adjust(S6_S0_geo$P.DE,'fdr')
+S6_S0_kegg = kegga(allgenes_entrez[S6_S0 == 'UP' | S6_S0 == 'DOWN'],universe=allgenes_entrez)
+S6_S0_kegg = topKEGG(S6_S0_kegg,number=nrow(S6_S0_kegg))
+S6_S0_kegg[,'P.ADJ.DE'] = p.adjust(S6_S0_kegg$P.DE,'fdr')
+
+# S12_S6
+S12_S6 = c()
+S12_S6_padj = c()
+S12_S6_logFC = c()
+contrast = makeContrasts('scc12-scc6',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    S12_S6[length(S12_S6)+1] = 'DOWN'
+    S12_S6_padj[length(S12_S6_padj)+1] = min(sig_down_adjpval)
+    S12_S6_logFC[length(S12_S6_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    S12_S6[length(S12_S6)+1] = 'UP'
+    S12_S6_padj[length(S12_S6_padj)+1] = min(sig_up_adjpval)
+    S12_S6_logFC[length(S12_S6_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    S12_S6[length(S12_S6)+1] = 'NOCHANGE'
+    S12_S6_padj[length(S12_S6_padj)+1] = '-'
+    S12_S6_logFC[length(S12_S6_logFC)+1] = '-'
+  }
+}
+S12_S6_geo = goana(allgenes_entrez[S12_S6 == 'UP' | S12_S6 == 'DOWN'],universe=allgenes_entrez)
+S12_S6_geo = topGO(S12_S6_geo,number=nrow(S12_S6_geo))
+S12_S6_geo[,'P.ADJ.DE'] = p.adjust(S12_S6_geo$P.DE,'fdr')
+S12_S6_kegg = kegga(allgenes_entrez[S12_S6 == 'UP' | S12_S6 == 'DOWN'],universe=allgenes_entrez)
+S12_S6_kegg = topKEGG(S12_S6_kegg,number=nrow(S12_S6_kegg))
+S12_S6_kegg[,'P.ADJ.DE'] = p.adjust(S12_S6_kegg$P.DE,'fdr')
+
+# S24_S12
+S24_S12 = c()
+S24_S12_padj = c()
+S24_S12_logFC = c()
+contrast = makeContrasts('scc24-scc12',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    S24_S12[length(S24_S12)+1] = 'DOWN'
+    S24_S12_padj[length(S24_S12_padj)+1] = min(sig_down_adjpval)
+    S24_S12_logFC[length(S24_S12_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    S24_S12[length(S24_S12)+1] = 'UP'
+    S24_S12_padj[length(S24_S12_padj)+1] = min(sig_up_adjpval)
+    S24_S12_logFC[length(S24_S12_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    S24_S12[length(S24_S12)+1] = 'NOCHANGE'
+    S24_S12_padj[length(S24_S12_padj)+1] = '-'
+    S24_S12_logFC[length(S24_S12_logFC)+1] = '-'
+  }
+}
+S24_S12_geo = goana(allgenes_entrez[S24_S12 == 'UP' | S24_S12 == 'DOWN'],universe=allgenes_entrez)
+S24_S12_geo = topGO(S24_S12_geo,number=nrow(S24_S12_geo))
+S24_S12_geo[,'P.ADJ.DE'] = p.adjust(S24_S12_geo$P.DE,'fdr')
+S24_S12_kegg = kegga(allgenes_entrez[S24_S12 == 'UP' | S24_S12 == 'DOWN'],universe=allgenes_entrez)
+S24_S12_kegg = topKEGG(S24_S12_kegg,number=nrow(S24_S12_kegg))
+S24_S12_kegg[,'P.ADJ.DE'] = p.adjust(S24_S12_kegg$P.DE,'fdr')
+
+# R6_R0
+R6_R0 = c()
+R6_R0_padj = c()
+R6_R0_logFC = c()
+contrast = makeContrasts('rscc6-rscc0',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R6_R0[length(R6_R0)+1] = 'DOWN'
+    R6_R0_padj[length(R6_R0_padj)+1] = min(sig_down_adjpval)
+    R6_R0_logFC[length(R6_R0_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R6_R0[length(R6_R0)+1] = 'UP'
+    R6_R0_padj[length(R6_R0_padj)+1] = min(sig_up_adjpval)
+    R6_R0_logFC[length(R6_R0_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R6_R0[length(R6_R0)+1] = 'NOCHANGE'
+    R6_R0_padj[length(R6_R0_padj)+1] = '-'
+    R6_R0_logFC[length(R6_R0_logFC)+1] = '-'
+  }
+}
+R6_R0_geo = goana(allgenes_entrez[R6_R0 == 'UP' | R6_R0 == 'DOWN'],universe=allgenes_entrez)
+R6_R0_geo = topGO(R6_R0_geo,number=nrow(R6_R0_geo))
+R6_R0_geo[,'P.ADJ.DE'] = p.adjust(R6_R0_geo$P.DE,'fdr')
+R6_R0_kegg = kegga(allgenes_entrez[R6_R0 == 'UP' | R6_R0 == 'DOWN'],universe=allgenes_entrez)
+R6_R0_kegg = topKEGG(R6_R0_kegg,number=nrow(R6_R0_kegg))
+R6_R0_kegg[,'P.ADJ.DE'] = p.adjust(R6_R0_kegg$P.DE,'fdr')
+
+# R12_R6
+R12_R6 = c()
+R12_R6_padj = c()
+R12_R6_logFC = c()
+contrast = makeContrasts('rscc12-rscc6',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R12_R6[length(R12_R6)+1] = 'DOWN'
+    R12_R6_padj[length(R12_R6_padj)+1] = min(sig_down_adjpval)
+    R12_R6_logFC[length(R12_R6_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R12_R6[length(R12_R6)+1] = 'UP'
+    R12_R6_padj[length(R12_R6_padj)+1] = min(sig_up_adjpval)
+    R12_R6_logFC[length(R12_R6_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R12_R6[length(R12_R6)+1] = 'NOCHANGE'
+    R12_R6_padj[length(R12_R6_padj)+1] = '-'
+    R12_R6_logFC[length(R12_R6_logFC)+1] = '-'
+  }
+}
+R12_R6_geo = goana(allgenes_entrez[R12_R6 == 'UP' | R12_R6 == 'DOWN'],universe=allgenes_entrez)
+R12_R6_geo = topGO(R12_R6_geo,number=nrow(R12_R6_geo))
+R12_R6_geo[,'P.ADJ.DE'] = p.adjust(R12_R6_geo$P.DE,'fdr')
+R12_R6_kegg = kegga(allgenes_entrez[R12_R6 == 'UP' | R12_R6 == 'DOWN'],universe=allgenes_entrez)
+R12_R6_kegg = topKEGG(R12_R6_kegg,number=nrow(R12_R6_kegg))
+R12_R6_kegg[,'P.ADJ.DE'] = p.adjust(R12_R6_kegg$P.DE,'fdr')
+
+# R24_R12
+R24_R12 = c()
+R24_R12_padj = c()
+R24_R12_logFC = c()
+contrast = makeContrasts('rscc24-rscc12',levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R24_R12[length(R24_R12)+1] = 'DOWN'
+    R24_R12_padj[length(R24_R12_padj)+1] = min(sig_down_adjpval)
+    R24_R12_logFC[length(R24_R12_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R24_R12[length(R24_R12)+1] = 'UP'
+    R24_R12_padj[length(R24_R12_padj)+1] = min(sig_up_adjpval)
+    R24_R12_logFC[length(R24_R12_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R24_R12[length(R24_R12)+1] = 'NOCHANGE'
+    R24_R12_padj[length(R24_R12_padj)+1] = '-'
+    R24_R12_logFC[length(R24_R12_logFC)+1] = '-'
+  }
+}
+R24_R12_geo = goana(allgenes_entrez[R24_R12 == 'UP' | R24_R12 == 'DOWN'],universe=allgenes_entrez)
+R24_R12_geo = topGO(R24_R12_geo,number=nrow(R24_R12_geo))
+R24_R12_geo[,'P.ADJ.DE'] = p.adjust(R24_R12_geo$P.DE,'fdr')
+R24_R12_kegg = kegga(allgenes_entrez[R24_R12 == 'UP' | R24_R12 == 'DOWN'],universe=allgenes_entrez)
+R24_R12_kegg = topKEGG(R24_R12_kegg,number=nrow(R24_R12_kegg))
+R24_R12_kegg[,'P.ADJ.DE'] = p.adjust(R24_R12_kegg$P.DE,'fdr')
+
+# R6_R0 - S6_S0
+R6_R0_S6_S0 = c()
+R6_R0_S6_S0_padj = c()
+R6_R0_S6_S0_logFC = c()
+contrast = makeContrasts(diff =(rscc6-rscc0)-(scc6-scc0),levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R6_R0_S6_S0[length(R6_R0_S6_S0)+1] = 'DOWN'
+    R6_R0_S6_S0_padj[length(R6_R0_S6_S0_padj)+1] = min(sig_down_adjpval)
+    R6_R0_S6_S0_logFC[length(R6_R0_S6_S0_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R6_R0_S6_S0[length(R6_R0_S6_S0)+1] = 'UP'
+    R6_R0_S6_S0_padj[length(R6_R0_S6_S0_padj)+1] = min(sig_up_adjpval)
+    R6_R0_S6_S0_logFC[length(R6_R0_S6_S0_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R6_R0_S6_S0[length(R6_R0_S6_S0)+1] = 'NOCHANGE'
+    R6_R0_S6_S0_padj[length(R6_R0_S6_S0_padj)+1] = '-'
+    R6_R0_S6_S0_logFC[length(R6_R0_S6_S0_logFC)+1] = '-'
+  }
+}
+R6_R0_S6_S0_geo = goana(allgenes_entrez[R6_R0_S6_S0 == 'UP' | R6_R0_S6_S0 == 'DOWN'],universe=allgenes_entrez)
+R6_R0_S6_S0_geo = topGO(R6_R0_S6_S0_geo,number=nrow(R6_R0_S6_S0_geo))
+R6_R0_S6_S0_geo[,'P.ADJ.DE'] = p.adjust(R6_R0_S6_S0_geo$P.DE,'fdr')
+R6_R0_S6_S0_kegg = kegga(allgenes_entrez[R6_R0_S6_S0 == 'UP' | R6_R0_S6_S0 == 'DOWN'],universe=allgenes_entrez)
+R6_R0_S6_S0_kegg = topKEGG(R6_R0_S6_S0_kegg,number=nrow(R6_R0_S6_S0_kegg))
+R6_R0_S6_S0_kegg[,'P.ADJ.DE'] = p.adjust(R6_R0_S6_S0_kegg$P.DE,'fdr')
+
+# R12_R6 - S12_S6
+R12_R6_S12_S6 = c()
+R12_R6_S12_S6_padj = c()
+R12_R6_S12_S6_logFC = c()
+contrast = makeContrasts(diff =(rscc12-rscc6)-(scc12-scc6),levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R12_R6_S12_S6[length(R12_R6_S12_S6)+1] = 'DOWN'
+    R12_R6_S12_S6_padj[length(R12_R6_S12_S6_padj)+1] = min(sig_down_adjpval)
+    R12_R6_S12_S6_logFC[length(R12_R6_S12_S6_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R12_R6_S12_S6[length(R12_R6_S12_S6)+1] = 'UP'
+    R12_R6_S12_S6_padj[length(R12_R6_S12_S6_padj)+1] = min(sig_up_adjpval)
+    R12_R6_S12_S6_logFC[length(R12_R6_S12_S6_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R12_R6_S12_S6[length(R12_R6_S12_S6)+1] = 'NOCHANGE'
+    R12_R6_S12_S6_padj[length(R12_R6_S12_S6_padj)+1] = '-'
+    R12_R6_S12_S6_logFC[length(R12_R6_S12_S6_logFC)+1] = '-'
+  }
+}
+R12_R6_S12_S6_geo = goana(allgenes_entrez[R12_R6_S12_S6 == 'UP' | R12_R6_S12_S6 == 'DOWN'],universe=allgenes_entrez)
+R12_R6_S12_S6_geo = topGO(R12_R6_S12_S6_geo,number=nrow(R12_R6_S12_S6_geo))
+R12_R6_S12_S6_geo[,'P.ADJ.DE'] = p.adjust(R12_R6_S12_S6_geo$P.DE,'fdr')
+R12_R6_S12_S6_kegg = kegga(allgenes_entrez[R12_R6_S12_S6 == 'UP' | R12_R6_S12_S6 == 'DOWN'],universe=allgenes_entrez)
+R12_R6_S12_S6_kegg = topKEGG(R12_R6_S12_S6_kegg,number=nrow(R12_R6_S12_S6_kegg))
+R12_R6_S12_S6_kegg[,'P.ADJ.DE'] = p.adjust(R12_R6_S12_S6_kegg$P.DE,'fdr')
+
+# R24_R12 - S24_S12
+R24_R12_S24_S12 = c()
+R24_R12_S24_S12_padj = c()
+R24_R12_S24_S12_logFC = c()
+contrast = makeContrasts(diff =(rscc24-rscc12)-(scc24-scc12),levels=design)
+fit2 = contrasts.fit(fit,contrast)
+fit2 = eBayes(fit2)
+toptable.fdr = topTable(fit2,number=nrow(selDataMatrix),adjust="fdr",sort.by="P")
+toptable.fdr[,'Entrez'] = nuID2RefSeqID(rownames(toptable.fdr),lib.mapping='lumiHumanIDMapping',returnAllInfo=TRUE)[,2]
+for (i in 1:length(allgenes_entrez)){
+  sig_down_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_down_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] < 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  sig_up_adjpval = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'adj.P.Val']
+  sig_up_FC = toptable.fdr[toptable.fdr[,'Entrez'] == allgenes_entrez[i] & toptable.fdr[,'logFC'] > 0 & toptable.fdr[,'adj.P.Val'] < 0.05,'logFC']
+  
+  if (length(sig_down_adjpval) > 0 && length(sig_up_adjpval) == 0){
+    R24_R12_S24_S12[length(R24_R12_S24_S12)+1] = 'DOWN'
+    R24_R12_S24_S12_padj[length(R24_R12_S24_S12_padj)+1] = min(sig_down_adjpval)
+    R24_R12_S24_S12_logFC[length(R24_R12_S24_S12_logFC)+1] = sig_down_FC[which.min(sig_down_adjpval)]
+  } else if (length(sig_up_adjpval) > 0 && length(sig_down_adjpval) == 0){
+    R24_R12_S24_S12[length(R24_R12_S24_S12)+1] = 'UP'
+    R24_R12_S24_S12_padj[length(R24_R12_S24_S12_padj)+1] = min(sig_up_adjpval)
+    R24_R12_S24_S12_logFC[length(R24_R12_S24_S12_logFC)+1] = sig_up_FC[which.min(sig_up_adjpval)]
+  } else {
+    R24_R12_S24_S12[length(R24_R12_S24_S12)+1] = 'NOCHANGE'
+    R24_R12_S24_S12_padj[length(R24_R12_S24_S12_padj)+1] = '-'
+    R24_R12_S24_S12_logFC[length(R24_R12_S24_S12_logFC)+1] = '-'
+  }
+}
+R24_R12_S24_S12_geo = goana(allgenes_entrez[R24_R12_S24_S12 == 'UP' | R24_R12_S24_S12 == 'DOWN'],universe=allgenes_entrez)
+R24_R12_S24_S12_geo = topGO(R24_R12_S24_S12_geo,number=nrow(R24_R12_S24_S12_geo))
+R24_R12_S24_S12_geo[,'P.ADJ.DE'] = p.adjust(R24_R12_S24_S12_geo$P.DE,'fdr')
+R24_R12_S24_S12_kegg = kegga(allgenes_entrez[R24_R12_S24_S12 == 'UP' | R24_R12_S24_S12 == 'DOWN'],universe=allgenes_entrez)
+R24_R12_S24_S12_kegg = topKEGG(R24_R12_S24_S12_kegg,number=nrow(R24_R12_S24_S12_kegg))
+R24_R12_S24_S12_kegg[,'P.ADJ.DE'] = p.adjust(R24_R12_S24_S12_kegg$P.DE,'fdr')
+
+# patterns
+s_pattern = c()
+r_pattern = c()
+r_s_pattern = c()
+for (i in 1:length(allgenes_entrez)){
+  s_pattern[length(s_pattern)+1] = paste(paste(substr(S6_S0[i],1,1),substr(S12_S6[i],1,1),sep=''),substr(S24_S12[i],1,1),sep='')
+  r_pattern[length(r_pattern)+1] = paste(paste(substr(R6_R0[i],1,1),substr(R12_R6[i],1,1),sep=''),substr(R24_R12[i],1,1),sep='')
+  r_s_pattern[length(r_s_pattern)+1] = paste(paste(substr(R6_R0_S6_S0[i],1,1),substr(R12_R6_S12_S6[i],1,1),sep=''),substr(R24_R12_S24_S12[i],1,1),sep='')
+}
+S_UUU_geo = goana(allgenes_entrez[s_pattern == 'UUU'],universe=allgenes_entrez)
+S_UUU_geo = topGO(S_UUU_geo,number=nrow(S_UUU_geo))
+S_UUU_geo[,'P.ADJ.DE'] = p.adjust(S_UUU_geo$P.DE,'fdr')
+S_UUU_kegg = kegga(allgenes_entrez[s_pattern == 'UUU'],universe=allgenes_entrez)
+S_UUU_kegg = topKEGG(S_UUU_kegg,number=nrow(S_UUU_kegg))
+S_UUU_kegg[,'P.ADJ.DE'] = p.adjust(S_UUU_kegg$P.DE,'fdr')
+
+S_UUN_geo = goana(allgenes_entrez[s_pattern == 'UUN'],universe=allgenes_entrez)
+S_UUN_geo = topGO(S_UUN_geo,number=nrow(S_UUN_geo))
+S_UUN_geo[,'P.ADJ.DE'] = p.adjust(S_UUN_geo$P.DE,'fdr')
+S_UUN_kegg = kegga(allgenes_entrez[s_pattern == 'UUN'],universe=allgenes_entrez)
+S_UUN_kegg = topKEGG(S_UUN_kegg,number=nrow(S_UUN_kegg))
+S_UUN_kegg[,'P.ADJ.DE'] = p.adjust(S_UUN_kegg$P.DE,'fdr')
+
+S_UUD_geo = goana(allgenes_entrez[s_pattern == 'UUD'],universe=allgenes_entrez)
+S_UUD_geo = topGO(S_UUD_geo,number=nrow(S_UUD_geo))
+S_UUD_geo[,'P.ADJ.DE'] = p.adjust(S_UUD_geo$P.DE,'fdr')
+S_UUD_kegg = kegga(allgenes_entrez[s_pattern == 'UUD'],universe=allgenes_entrez)
+S_UUD_kegg = topKEGG(S_UUD_kegg,number=nrow(S_UUD_kegg))
+S_UUD_kegg[,'P.ADJ.DE'] = p.adjust(S_UUD_kegg$P.DE,'fdr')
+
+S_UNU_geo = goana(allgenes_entrez[s_pattern == 'UNU'],universe=allgenes_entrez)
+S_UNU_geo = topGO(S_UNU_geo,number=nrow(S_UNU_geo))
+S_UNU_geo[,'P.ADJ.DE'] = p.adjust(S_UNU_geo$P.DE,'fdr')
+S_UNU_kegg = kegga(allgenes_entrez[s_pattern == 'UNU'],universe=allgenes_entrez)
+S_UNU_kegg = topKEGG(S_UNU_kegg,number=nrow(S_UNU_kegg))
+S_UNU_kegg[,'P.ADJ.DE'] = p.adjust(S_UNU_kegg$P.DE,'fdr')
+
+S_UNN_geo = goana(allgenes_entrez[s_pattern == 'UNN'],universe=allgenes_entrez)
+S_UNN_geo = topGO(S_UNN_geo,number=nrow(S_UNN_geo))
+S_UNN_geo[,'P.ADJ.DE'] = p.adjust(S_UNN_geo$P.DE,'fdr')
+S_UNN_kegg = kegga(allgenes_entrez[s_pattern == 'UNN'],universe=allgenes_entrez)
+S_UNN_kegg = topKEGG(S_UNN_kegg,number=nrow(S_UNN_kegg))
+S_UNN_kegg[,'P.ADJ.DE'] = p.adjust(S_UNN_kegg$P.DE,'fdr')
+
+S_UND_geo = goana(allgenes_entrez[s_pattern == 'UND'],universe=allgenes_entrez)
+S_UND_geo = topGO(S_UND_geo,number=nrow(S_UND_geo))
+S_UND_geo[,'P.ADJ.DE'] = p.adjust(S_UND_geo$P.DE,'fdr')
+S_UND_kegg = kegga(allgenes_entrez[s_pattern == 'UND'],universe=allgenes_entrez)
+S_UND_kegg = topKEGG(S_UND_kegg,number=nrow(S_UND_kegg))
+S_UND_kegg[,'P.ADJ.DE'] = p.adjust(S_UND_kegg$P.DE,'fdr')
+
+S_UDU_geo = goana(allgenes_entrez[s_pattern == 'UDU'],universe=allgenes_entrez)
+S_UDU_geo = topGO(S_UDU_geo,number=nrow(S_UDU_geo))
+S_UDU_geo[,'P.ADJ.DE'] = p.adjust(S_UDU_geo$P.DE,'fdr')
+S_UDU_kegg = kegga(allgenes_entrez[s_pattern == 'UDU'],universe=allgenes_entrez)
+S_UDU_kegg = topKEGG(S_UDU_kegg,number=nrow(S_UDU_kegg))
+S_UDU_kegg[,'P.ADJ.DE'] = p.adjust(S_UDU_kegg$P.DE,'fdr')
+
+S_UDN_geo = goana(allgenes_entrez[s_pattern == 'UDN'],universe=allgenes_entrez)
+S_UDN_geo = topGO(S_UDN_geo,number=nrow(S_UDN_geo))
+S_UDN_geo[,'P.ADJ.DE'] = p.adjust(S_UDN_geo$P.DE,'fdr')
+S_UDN_kegg = kegga(allgenes_entrez[s_pattern == 'UDN'],universe=allgenes_entrez)
+S_UDN_kegg = topKEGG(S_UDN_kegg,number=nrow(S_UDN_kegg))
+S_UDN_kegg[,'P.ADJ.DE'] = p.adjust(S_UDN_kegg$P.DE,'fdr')
+
+S_UDD_geo = goana(allgenes_entrez[s_pattern == 'UDD'],universe=allgenes_entrez)
+S_UDD_geo = topGO(S_UDD_geo,number=nrow(S_UDD_geo))
+S_UDD_geo[,'P.ADJ.DE'] = p.adjust(S_UDD_geo$P.DE,'fdr')
+S_UDD_kegg = kegga(allgenes_entrez[s_pattern == 'UDD'],universe=allgenes_entrez)
+S_UDD_kegg = topKEGG(S_UDD_kegg,number=nrow(S_UDD_kegg))
+S_UDD_kegg[,'P.ADJ.DE'] = p.adjust(S_UDD_kegg$P.DE,'fdr')
+
+S_NUU_geo = goana(allgenes_entrez[s_pattern == 'NUU'],universe=allgenes_entrez)
+S_NUU_geo = topGO(S_NUU_geo,number=nrow(S_NUU_geo))
+S_NUU_geo[,'P.ADJ.DE'] = p.adjust(S_NUU_geo$P.DE,'fdr')
+S_NUU_kegg = kegga(allgenes_entrez[s_pattern == 'NUU'],universe=allgenes_entrez)
+S_NUU_kegg = topKEGG(S_NUU_kegg,number=nrow(S_NUU_kegg))
+S_NUU_kegg[,'P.ADJ.DE'] = p.adjust(S_NUU_kegg$P.DE,'fdr')
+
+S_NUN_geo = goana(allgenes_entrez[s_pattern == 'NUN'],universe=allgenes_entrez)
+S_NUN_geo = topGO(S_NUN_geo,number=nrow(S_NUN_geo))
+S_NUN_geo[,'P.ADJ.DE'] = p.adjust(S_NUN_geo$P.DE,'fdr')
+S_NUN_kegg = kegga(allgenes_entrez[s_pattern == 'NUN'],universe=allgenes_entrez)
+S_NUN_kegg = topKEGG(S_NUN_kegg,number=nrow(S_NUN_kegg))
+S_NUN_kegg[,'P.ADJ.DE'] = p.adjust(S_NUN_kegg$P.DE,'fdr')
+
+S_NUD_geo = goana(allgenes_entrez[s_pattern == 'NUD'],universe=allgenes_entrez)
+S_NUD_geo = topGO(S_NUD_geo,number=nrow(S_NUD_geo))
+S_NUD_geo[,'P.ADJ.DE'] = p.adjust(S_NUD_geo$P.DE,'fdr')
+S_NUD_kegg = kegga(allgenes_entrez[s_pattern == 'NUD'],universe=allgenes_entrez)
+S_NUD_kegg = topKEGG(S_NUD_kegg,number=nrow(S_NUD_kegg))
+S_NUD_kegg[,'P.ADJ.DE'] = p.adjust(S_NUD_kegg$P.DE,'fdr')
+
+S_NNU_geo = goana(allgenes_entrez[s_pattern == 'NNU'],universe=allgenes_entrez)
+S_NNU_geo = topGO(S_NNU_geo,number=nrow(S_NNU_geo))
+S_NNU_geo[,'P.ADJ.DE'] = p.adjust(S_NNU_geo$P.DE,'fdr')
+S_NNU_kegg = kegga(allgenes_entrez[s_pattern == 'NNU'],universe=allgenes_entrez)
+S_NNU_kegg = topKEGG(S_NNU_kegg,number=nrow(S_NNU_kegg))
+S_NNU_kegg[,'P.ADJ.DE'] = p.adjust(S_NNU_kegg$P.DE,'fdr')
+
+S_NNN_geo = goana(allgenes_entrez[s_pattern == 'NNN'],universe=allgenes_entrez)
+S_NNN_geo = topGO(S_NNN_geo,number=nrow(S_NNN_geo))
+S_NNN_geo[,'P.ADJ.DE'] = p.adjust(S_NNN_geo$P.DE,'fdr')
+S_NNN_kegg = kegga(allgenes_entrez[s_pattern == 'NNN'],universe=allgenes_entrez)
+S_NNN_kegg = topKEGG(S_NNN_kegg,number=nrow(S_NNN_kegg))
+S_NNN_kegg[,'P.ADJ.DE'] = p.adjust(S_NNN_kegg$P.DE,'fdr')
+
+S_NND_geo = goana(allgenes_entrez[s_pattern == 'NND'],universe=allgenes_entrez)
+S_NND_geo = topGO(S_NND_geo,number=nrow(S_NND_geo))
+S_NND_geo[,'P.ADJ.DE'] = p.adjust(S_NND_geo$P.DE,'fdr')
+S_NND_kegg = kegga(allgenes_entrez[s_pattern == 'NND'],universe=allgenes_entrez)
+S_NND_kegg = topKEGG(S_NND_kegg,number=nrow(S_NND_kegg))
+S_NND_kegg[,'P.ADJ.DE'] = p.adjust(S_NND_kegg$P.DE,'fdr')
+
+S_NDU_geo = goana(allgenes_entrez[s_pattern == 'NDU'],universe=allgenes_entrez)
+S_NDU_geo = topGO(S_NDU_geo,number=nrow(S_NDU_geo))
+S_NDU_geo[,'P.ADJ.DE'] = p.adjust(S_NDU_geo$P.DE,'fdr')
+S_NDU_kegg = kegga(allgenes_entrez[s_pattern == 'NDU'],universe=allgenes_entrez)
+S_NDU_kegg = topKEGG(S_NDU_kegg,number=nrow(S_NDU_kegg))
+S_NDU_kegg[,'P.ADJ.DE'] = p.adjust(S_NDU_kegg$P.DE,'fdr')
+
+S_NDN_geo = goana(allgenes_entrez[s_pattern == 'NDN'],universe=allgenes_entrez)
+S_NDN_geo = topGO(S_NDN_geo,number=nrow(S_NDN_geo))
+S_NDN_geo[,'P.ADJ.DE'] = p.adjust(S_NDN_geo$P.DE,'fdr')
+S_NDN_kegg = kegga(allgenes_entrez[s_pattern == 'NDN'],universe=allgenes_entrez)
+S_NDN_kegg = topKEGG(S_NDN_kegg,number=nrow(S_NDN_kegg))
+S_NDN_kegg[,'P.ADJ.DE'] = p.adjust(S_NDN_kegg$P.DE,'fdr')
+
+S_NDD_geo = goana(allgenes_entrez[s_pattern == 'NDD'],universe=allgenes_entrez)
+S_NDD_geo = topGO(S_NDD_geo,number=nrow(S_NDD_geo))
+S_NDD_geo[,'P.ADJ.DE'] = p.adjust(S_NDD_geo$P.DE,'fdr')
+S_NDD_kegg = kegga(allgenes_entrez[s_pattern == 'NDD'],universe=allgenes_entrez)
+S_NDD_kegg = topKEGG(S_NDD_kegg,number=nrow(S_NDD_kegg))
+S_NDD_kegg[,'P.ADJ.DE'] = p.adjust(S_NDD_kegg$P.DE,'fdr')
+
+S_DUU_geo = goana(allgenes_entrez[s_pattern == 'DUU'],universe=allgenes_entrez)
+S_DUU_geo = topGO(S_DUU_geo,number=nrow(S_DUU_geo))
+S_DUU_geo[,'P.ADJ.DE'] = p.adjust(S_DUU_geo$P.DE,'fdr')
+S_DUU_kegg = kegga(allgenes_entrez[s_pattern == 'DUU'],universe=allgenes_entrez)
+S_DUU_kegg = topKEGG(S_DUU_kegg,number=nrow(S_DUU_kegg))
+S_DUU_kegg[,'P.ADJ.DE'] = p.adjust(S_DUU_kegg$P.DE,'fdr')
+
+S_DUN_geo = goana(allgenes_entrez[s_pattern == 'DUN'],universe=allgenes_entrez)
+S_DUN_geo = topGO(S_DUN_geo,number=nrow(S_DUN_geo))
+S_DUN_geo[,'P.ADJ.DE'] = p.adjust(S_DUN_geo$P.DE,'fdr')
+S_DUN_kegg = kegga(allgenes_entrez[s_pattern == 'DUN'],universe=allgenes_entrez)
+S_DUN_kegg = topKEGG(S_DUN_kegg,number=nrow(S_DUN_kegg))
+S_DUN_kegg[,'P.ADJ.DE'] = p.adjust(S_DUN_kegg$P.DE,'fdr')
+
+S_DUD_geo = goana(allgenes_entrez[s_pattern == 'DUD'],universe=allgenes_entrez)
+S_DUD_geo = topGO(S_DUD_geo,number=nrow(S_DUD_geo))
+S_DUD_geo[,'P.ADJ.DE'] = p.adjust(S_DUD_geo$P.DE,'fdr')
+S_DUD_kegg = kegga(allgenes_entrez[s_pattern == 'DUD'],universe=allgenes_entrez)
+S_DUD_kegg = topKEGG(S_DUD_kegg,number=nrow(S_DUD_kegg))
+S_DUD_kegg[,'P.ADJ.DE'] = p.adjust(S_DUD_kegg$P.DE,'fdr')
+
+S_DNU_geo = goana(allgenes_entrez[s_pattern == 'DNU'],universe=allgenes_entrez)
+S_DNU_geo = topGO(S_DNU_geo,number=nrow(S_DNU_geo))
+S_DNU_geo[,'P.ADJ.DE'] = p.adjust(S_DNU_geo$P.DE,'fdr')
+S_DNU_kegg = kegga(allgenes_entrez[s_pattern == 'DNU'],universe=allgenes_entrez)
+S_DNU_kegg = topKEGG(S_DNU_kegg,number=nrow(S_DNU_kegg))
+S_DNU_kegg[,'P.ADJ.DE'] = p.adjust(S_DNU_kegg$P.DE,'fdr')
+
+S_DNN_geo = goana(allgenes_entrez[s_pattern == 'DNN'],universe=allgenes_entrez)
+S_DNN_geo = topGO(S_DNN_geo,number=nrow(S_DNN_geo))
+S_DNN_geo[,'P.ADJ.DE'] = p.adjust(S_DNN_geo$P.DE,'fdr')
+S_DNN_kegg = kegga(allgenes_entrez[s_pattern == 'DNN'],universe=allgenes_entrez)
+S_DNN_kegg = topKEGG(S_DNN_kegg,number=nrow(S_DNN_kegg))
+S_DNN_kegg[,'P.ADJ.DE'] = p.adjust(S_DNN_kegg$P.DE,'fdr')
+
+S_DND_geo = goana(allgenes_entrez[s_pattern == 'DND'],universe=allgenes_entrez)
+S_DND_geo = topGO(S_DND_geo,number=nrow(S_DND_geo))
+S_DND_geo[,'P.ADJ.DE'] = p.adjust(S_DND_geo$P.DE,'fdr')
+S_DND_kegg = kegga(allgenes_entrez[s_pattern == 'DND'],universe=allgenes_entrez)
+S_DND_kegg = topKEGG(S_DND_kegg,number=nrow(S_DND_kegg))
+S_DND_kegg[,'P.ADJ.DE'] = p.adjust(S_DND_kegg$P.DE,'fdr')
+
+S_DDU_geo = goana(allgenes_entrez[s_pattern == 'DDU'],universe=allgenes_entrez)
+S_DDU_geo = topGO(S_DDU_geo,number=nrow(S_DDU_geo))
+S_DDU_geo[,'P.ADJ.DE'] = p.adjust(S_DDU_geo$P.DE,'fdr')
+S_DDU_kegg = kegga(allgenes_entrez[s_pattern == 'DDU'],universe=allgenes_entrez)
+S_DDU_kegg = topKEGG(S_DDU_kegg,number=nrow(S_DDU_kegg))
+S_DDU_kegg[,'P.ADJ.DE'] = p.adjust(S_DDU_kegg$P.DE,'fdr')
+
+S_DDN_geo = goana(allgenes_entrez[s_pattern == 'DDN'],universe=allgenes_entrez)
+S_DDN_geo = topGO(S_DDN_geo,number=nrow(S_DDN_geo))
+S_DDN_geo[,'P.ADJ.DE'] = p.adjust(S_DDN_geo$P.DE,'fdr')
+S_DDN_kegg = kegga(allgenes_entrez[s_pattern == 'DDN'],universe=allgenes_entrez)
+S_DDN_kegg = topKEGG(S_DDN_kegg,number=nrow(S_DDN_kegg))
+S_DDN_kegg[,'P.ADJ.DE'] = p.adjust(S_DDN_kegg$P.DE,'fdr')
+
+S_DDD_geo = goana(allgenes_entrez[s_pattern == 'DDD'],universe=allgenes_entrez)
+S_DDD_geo = topGO(S_DDD_geo,number=nrow(S_DDD_geo))
+S_DDD_geo[,'P.ADJ.DE'] = p.adjust(S_DDD_geo$P.DE,'fdr')
+S_DDD_kegg = kegga(allgenes_entrez[s_pattern == 'DDD'],universe=allgenes_entrez)
+S_DDD_kegg = topKEGG(S_DDD_kegg,number=nrow(S_DDD_kegg))
+S_DDD_kegg[,'P.ADJ.DE'] = p.adjust(S_DDD_kegg$P.DE,'fdr')
+
+R_UUU_geo = goana(allgenes_entrez[r_pattern == 'UUU'],universe=allgenes_entrez)
+R_UUU_geo = topGO(R_UUU_geo,number=nrow(R_UUU_geo))
+R_UUU_geo[,'P.ADJ.DE'] = p.adjust(R_UUU_geo$P.DE,'fdr')
+R_UUU_kegg = kegga(allgenes_entrez[r_pattern == 'UUU'],universe=allgenes_entrez)
+R_UUU_kegg = topKEGG(R_UUU_kegg,number=nrow(R_UUU_kegg))
+R_UUU_kegg[,'P.ADJ.DE'] = p.adjust(R_UUU_kegg$P.DE,'fdr')
+
+R_UUN_geo = goana(allgenes_entrez[r_pattern == 'UUN'],universe=allgenes_entrez)
+R_UUN_geo = topGO(R_UUN_geo,number=nrow(R_UUN_geo))
+R_UUN_geo[,'P.ADJ.DE'] = p.adjust(R_UUN_geo$P.DE,'fdr')
+R_UUN_kegg = kegga(allgenes_entrez[r_pattern == 'UUN'],universe=allgenes_entrez)
+R_UUN_kegg = topKEGG(R_UUN_kegg,number=nrow(R_UUN_kegg))
+R_UUN_kegg[,'P.ADJ.DE'] = p.adjust(R_UUN_kegg$P.DE,'fdr')
+
+R_UUD_geo = goana(allgenes_entrez[r_pattern == 'UUD'],universe=allgenes_entrez)
+R_UUD_geo = topGO(R_UUD_geo,number=nrow(R_UUD_geo))
+R_UUD_geo[,'P.ADJ.DE'] = p.adjust(R_UUD_geo$P.DE,'fdr')
+R_UUD_kegg = kegga(allgenes_entrez[r_pattern == 'UUD'],universe=allgenes_entrez)
+R_UUD_kegg = topKEGG(R_UUD_kegg,number=nrow(R_UUD_kegg))
+R_UUD_kegg[,'P.ADJ.DE'] = p.adjust(R_UUD_kegg$P.DE,'fdr')
+
+R_UNU_geo = goana(allgenes_entrez[r_pattern == 'UNU'],universe=allgenes_entrez)
+R_UNU_geo = topGO(R_UNU_geo,number=nrow(R_UNU_geo))
+R_UNU_geo[,'P.ADJ.DE'] = p.adjust(R_UNU_geo$P.DE,'fdr')
+R_UNU_kegg = kegga(allgenes_entrez[r_pattern == 'UNU'],universe=allgenes_entrez)
+R_UNU_kegg = topKEGG(R_UNU_kegg,number=nrow(R_UNU_kegg))
+R_UNU_kegg[,'P.ADJ.DE'] = p.adjust(R_UNU_kegg$P.DE,'fdr')
+
+R_UNN_geo = goana(allgenes_entrez[r_pattern == 'UNN'],universe=allgenes_entrez)
+R_UNN_geo = topGO(R_UNN_geo,number=nrow(R_UNN_geo))
+R_UNN_geo[,'P.ADJ.DE'] = p.adjust(R_UNN_geo$P.DE,'fdr')
+R_UNN_kegg = kegga(allgenes_entrez[r_pattern == 'UNN'],universe=allgenes_entrez)
+R_UNN_kegg = topKEGG(R_UNN_kegg,number=nrow(R_UNN_kegg))
+R_UNN_kegg[,'P.ADJ.DE'] = p.adjust(R_UNN_kegg$P.DE,'fdr')
+
+R_UND_geo = goana(allgenes_entrez[r_pattern == 'UND'],universe=allgenes_entrez)
+R_UND_geo = topGO(R_UND_geo,number=nrow(R_UND_geo))
+R_UND_geo[,'P.ADJ.DE'] = p.adjust(R_UND_geo$P.DE,'fdr')
+R_UND_kegg = kegga(allgenes_entrez[r_pattern == 'UND'],universe=allgenes_entrez)
+R_UND_kegg = topKEGG(R_UND_kegg,number=nrow(R_UND_kegg))
+R_UND_kegg[,'P.ADJ.DE'] = p.adjust(R_UND_kegg$P.DE,'fdr')
+
+R_UDU_geo = goana(allgenes_entrez[r_pattern == 'UDU'],universe=allgenes_entrez)
+R_UDU_geo = topGO(R_UDU_geo,number=nrow(R_UDU_geo))
+R_UDU_geo[,'P.ADJ.DE'] = p.adjust(R_UDU_geo$P.DE,'fdr')
+R_UDU_kegg = kegga(allgenes_entrez[r_pattern == 'UDU'],universe=allgenes_entrez)
+R_UDU_kegg = topKEGG(R_UDU_kegg,number=nrow(R_UDU_kegg))
+R_UDU_kegg[,'P.ADJ.DE'] = p.adjust(R_UDU_kegg$P.DE,'fdr')
+
+R_UDN_geo = goana(allgenes_entrez[r_pattern == 'UDN'],universe=allgenes_entrez)
+R_UDN_geo = topGO(R_UDN_geo,number=nrow(R_UDN_geo))
+R_UDN_geo[,'P.ADJ.DE'] = p.adjust(R_UDN_geo$P.DE,'fdr')
+R_UDN_kegg = kegga(allgenes_entrez[r_pattern == 'UDN'],universe=allgenes_entrez)
+R_UDN_kegg = topKEGG(R_UDN_kegg,number=nrow(R_UDN_kegg))
+R_UDN_kegg[,'P.ADJ.DE'] = p.adjust(R_UDN_kegg$P.DE,'fdr')
+
+R_UDD_geo = goana(allgenes_entrez[r_pattern == 'UDD'],universe=allgenes_entrez)
+R_UDD_geo = topGO(R_UDD_geo,number=nrow(R_UDD_geo))
+R_UDD_geo[,'P.ADJ.DE'] = p.adjust(R_UDD_geo$P.DE,'fdr')
+R_UDD_kegg = kegga(allgenes_entrez[r_pattern == 'UDD'],universe=allgenes_entrez)
+R_UDD_kegg = topKEGG(R_UDD_kegg,number=nrow(R_UDD_kegg))
+R_UDD_kegg[,'P.ADJ.DE'] = p.adjust(R_UDD_kegg$P.DE,'fdr')
+
+R_NUU_geo = goana(allgenes_entrez[r_pattern == 'NUU'],universe=allgenes_entrez)
+R_NUU_geo = topGO(R_NUU_geo,number=nrow(R_NUU_geo))
+R_NUU_geo[,'P.ADJ.DE'] = p.adjust(R_NUU_geo$P.DE,'fdr')
+R_NUU_kegg = kegga(allgenes_entrez[r_pattern == 'NUU'],universe=allgenes_entrez)
+R_NUU_kegg = topKEGG(R_NUU_kegg,number=nrow(R_NUU_kegg))
+R_NUU_kegg[,'P.ADJ.DE'] = p.adjust(R_NUU_kegg$P.DE,'fdr')
+
+R_NUN_geo = goana(allgenes_entrez[r_pattern == 'NUN'],universe=allgenes_entrez)
+R_NUN_geo = topGO(R_NUN_geo,number=nrow(R_NUN_geo))
+R_NUN_geo[,'P.ADJ.DE'] = p.adjust(R_NUN_geo$P.DE,'fdr')
+R_NUN_kegg = kegga(allgenes_entrez[r_pattern == 'NUN'],universe=allgenes_entrez)
+R_NUN_kegg = topKEGG(R_NUN_kegg,number=nrow(R_NUN_kegg))
+R_NUN_kegg[,'P.ADJ.DE'] = p.adjust(R_NUN_kegg$P.DE,'fdr')
+
+R_NUD_geo = goana(allgenes_entrez[r_pattern == 'NUD'],universe=allgenes_entrez)
+R_NUD_geo = topGO(R_NUD_geo,number=nrow(R_NUD_geo))
+R_NUD_geo[,'P.ADJ.DE'] = p.adjust(R_NUD_geo$P.DE,'fdr')
+R_NUD_kegg = kegga(allgenes_entrez[r_pattern == 'NUD'],universe=allgenes_entrez)
+R_NUD_kegg = topKEGG(R_NUD_kegg,number=nrow(R_NUD_kegg))
+R_NUD_kegg[,'P.ADJ.DE'] = p.adjust(R_NUD_kegg$P.DE,'fdr')
+
+R_NNU_geo = goana(allgenes_entrez[r_pattern == 'NNU'],universe=allgenes_entrez)
+R_NNU_geo = topGO(R_NNU_geo,number=nrow(R_NNU_geo))
+R_NNU_geo[,'P.ADJ.DE'] = p.adjust(R_NNU_geo$P.DE,'fdr')
+R_NNU_kegg = kegga(allgenes_entrez[r_pattern == 'NNU'],universe=allgenes_entrez)
+R_NNU_kegg = topKEGG(R_NNU_kegg,number=nrow(R_NNU_kegg))
+R_NNU_kegg[,'P.ADJ.DE'] = p.adjust(R_NNU_kegg$P.DE,'fdr')
+
+R_NNN_geo = goana(allgenes_entrez[r_pattern == 'NNN'],universe=allgenes_entrez)
+R_NNN_geo = topGO(R_NNN_geo,number=nrow(R_NNN_geo))
+R_NNN_geo[,'P.ADJ.DE'] = p.adjust(R_NNN_geo$P.DE,'fdr')
+R_NNN_kegg = kegga(allgenes_entrez[r_pattern == 'NNN'],universe=allgenes_entrez)
+R_NNN_kegg = topKEGG(R_NNN_kegg,number=nrow(R_NNN_kegg))
+R_NNN_kegg[,'P.ADJ.DE'] = p.adjust(R_NNN_kegg$P.DE,'fdr')
+
+R_NND_geo = goana(allgenes_entrez[r_pattern == 'NND'],universe=allgenes_entrez)
+R_NND_geo = topGO(R_NND_geo,number=nrow(R_NND_geo))
+R_NND_geo[,'P.ADJ.DE'] = p.adjust(R_NND_geo$P.DE,'fdr')
+R_NND_kegg = kegga(allgenes_entrez[r_pattern == 'NND'],universe=allgenes_entrez)
+R_NND_kegg = topKEGG(R_NND_kegg,number=nrow(R_NND_kegg))
+R_NND_kegg[,'P.ADJ.DE'] = p.adjust(R_NND_kegg$P.DE,'fdr')
+
+R_NDU_geo = goana(allgenes_entrez[r_pattern == 'NDU'],universe=allgenes_entrez)
+R_NDU_geo = topGO(R_NDU_geo,number=nrow(R_NDU_geo))
+R_NDU_geo[,'P.ADJ.DE'] = p.adjust(R_NDU_geo$P.DE,'fdr')
+R_NDU_kegg = kegga(allgenes_entrez[r_pattern == 'NDU'],universe=allgenes_entrez)
+R_NDU_kegg = topKEGG(R_NDU_kegg,number=nrow(R_NDU_kegg))
+R_NDU_kegg[,'P.ADJ.DE'] = p.adjust(R_NDU_kegg$P.DE,'fdr')
+
+R_NDN_geo = goana(allgenes_entrez[r_pattern == 'NDN'],universe=allgenes_entrez)
+R_NDN_geo = topGO(R_NDN_geo,number=nrow(R_NDN_geo))
+R_NDN_geo[,'P.ADJ.DE'] = p.adjust(R_NDN_geo$P.DE,'fdr')
+R_NDN_kegg = kegga(allgenes_entrez[r_pattern == 'NDN'],universe=allgenes_entrez)
+R_NDN_kegg = topKEGG(R_NDN_kegg,number=nrow(R_NDN_kegg))
+R_NDN_kegg[,'P.ADJ.DE'] = p.adjust(R_NDN_kegg$P.DE,'fdr')
+
+R_NDD_geo = goana(allgenes_entrez[r_pattern == 'NDD'],universe=allgenes_entrez)
+R_NDD_geo = topGO(R_NDD_geo,number=nrow(R_NDD_geo))
+R_NDD_geo[,'P.ADJ.DE'] = p.adjust(R_NDD_geo$P.DE,'fdr')
+R_NDD_kegg = kegga(allgenes_entrez[r_pattern == 'NDD'],universe=allgenes_entrez)
+R_NDD_kegg = topKEGG(R_NDD_kegg,number=nrow(R_NDD_kegg))
+R_NDD_kegg[,'P.ADJ.DE'] = p.adjust(R_NDD_kegg$P.DE,'fdr')
+
+R_DUU_geo = goana(allgenes_entrez[r_pattern == 'DUU'],universe=allgenes_entrez)
+R_DUU_geo = topGO(R_DUU_geo,number=nrow(R_DUU_geo))
+R_DUU_geo[,'P.ADJ.DE'] = p.adjust(R_DUU_geo$P.DE,'fdr')
+R_DUU_kegg = kegga(allgenes_entrez[r_pattern == 'DUU'],universe=allgenes_entrez)
+R_DUU_kegg = topKEGG(R_DUU_kegg,number=nrow(R_DUU_kegg))
+R_DUU_kegg[,'P.ADJ.DE'] = p.adjust(R_DUU_kegg$P.DE,'fdr')
+
+R_DUN_geo = goana(allgenes_entrez[r_pattern == 'DUN'],universe=allgenes_entrez)
+R_DUN_geo = topGO(R_DUN_geo,number=nrow(R_DUN_geo))
+R_DUN_geo[,'P.ADJ.DE'] = p.adjust(R_DUN_geo$P.DE,'fdr')
+R_DUN_kegg = kegga(allgenes_entrez[r_pattern == 'DUN'],universe=allgenes_entrez)
+R_DUN_kegg = topKEGG(R_DUN_kegg,number=nrow(R_DUN_kegg))
+R_DUN_kegg[,'P.ADJ.DE'] = p.adjust(R_DUN_kegg$P.DE,'fdr')
+
+R_DUD_geo = goana(allgenes_entrez[r_pattern == 'DUD'],universe=allgenes_entrez)
+R_DUD_geo = topGO(R_DUD_geo,number=nrow(R_DUD_geo))
+R_DUD_geo[,'P.ADJ.DE'] = p.adjust(R_DUD_geo$P.DE,'fdr')
+R_DUD_kegg = kegga(allgenes_entrez[r_pattern == 'DUD'],universe=allgenes_entrez)
+R_DUD_kegg = topKEGG(R_DUD_kegg,number=nrow(R_DUD_kegg))
+R_DUD_kegg[,'P.ADJ.DE'] = p.adjust(R_DUD_kegg$P.DE,'fdr')
+
+R_DNU_geo = goana(allgenes_entrez[r_pattern == 'DNU'],universe=allgenes_entrez)
+R_DNU_geo = topGO(R_DNU_geo,number=nrow(R_DNU_geo))
+R_DNU_geo[,'P.ADJ.DE'] = p.adjust(R_DNU_geo$P.DE,'fdr')
+R_DNU_kegg = kegga(allgenes_entrez[r_pattern == 'DNU'],universe=allgenes_entrez)
+R_DNU_kegg = topKEGG(R_DNU_kegg,number=nrow(R_DNU_kegg))
+R_DNU_kegg[,'P.ADJ.DE'] = p.adjust(R_DNU_kegg$P.DE,'fdr')
+
+R_DNN_geo = goana(allgenes_entrez[r_pattern == 'DNN'],universe=allgenes_entrez)
+R_DNN_geo = topGO(R_DNN_geo,number=nrow(R_DNN_geo))
+R_DNN_geo[,'P.ADJ.DE'] = p.adjust(R_DNN_geo$P.DE,'fdr')
+R_DNN_kegg = kegga(allgenes_entrez[r_pattern == 'DNN'],universe=allgenes_entrez)
+R_DNN_kegg = topKEGG(R_DNN_kegg,number=nrow(R_DNN_kegg))
+R_DNN_kegg[,'P.ADJ.DE'] = p.adjust(R_DNN_kegg$P.DE,'fdr')
+
+R_DND_geo = goana(allgenes_entrez[r_pattern == 'DND'],universe=allgenes_entrez)
+R_DND_geo = topGO(R_DND_geo,number=nrow(R_DND_geo))
+R_DND_geo[,'P.ADJ.DE'] = p.adjust(R_DND_geo$P.DE,'fdr')
+R_DND_kegg = kegga(allgenes_entrez[r_pattern == 'DND'],universe=allgenes_entrez)
+R_DND_kegg = topKEGG(R_DND_kegg,number=nrow(R_DND_kegg))
+R_DND_kegg[,'P.ADJ.DE'] = p.adjust(R_DND_kegg$P.DE,'fdr')
+
+R_DDU_geo = goana(allgenes_entrez[r_pattern == 'DDU'],universe=allgenes_entrez)
+R_DDU_geo = topGO(R_DDU_geo,number=nrow(R_DDU_geo))
+R_DDU_geo[,'P.ADJ.DE'] = p.adjust(R_DDU_geo$P.DE,'fdr')
+R_DDU_kegg = kegga(allgenes_entrez[r_pattern == 'DDU'],universe=allgenes_entrez)
+R_DDU_kegg = topKEGG(R_DDU_kegg,number=nrow(R_DDU_kegg))
+R_DDU_kegg[,'P.ADJ.DE'] = p.adjust(R_DDU_kegg$P.DE,'fdr')
+
+R_DDN_geo = goana(allgenes_entrez[r_pattern == 'DDN'],universe=allgenes_entrez)
+R_DDN_geo = topGO(R_DDN_geo,number=nrow(R_DDN_geo))
+R_DDN_geo[,'P.ADJ.DE'] = p.adjust(R_DDN_geo$P.DE,'fdr')
+R_DDN_kegg = kegga(allgenes_entrez[r_pattern == 'DDN'],universe=allgenes_entrez)
+R_DDN_kegg = topKEGG(R_DDN_kegg,number=nrow(R_DDN_kegg))
+R_DDN_kegg[,'P.ADJ.DE'] = p.adjust(R_DDN_kegg$P.DE,'fdr')
+
+R_DDD_geo = goana(allgenes_entrez[r_pattern == 'DDD'],universe=allgenes_entrez)
+R_DDD_geo = topGO(R_DDD_geo,number=nrow(R_DDD_geo))
+R_DDD_geo[,'P.ADJ.DE'] = p.adjust(R_DDD_geo$P.DE,'fdr')
+R_DDD_kegg = kegga(allgenes_entrez[r_pattern == 'DDD'],universe=allgenes_entrez)
+R_DDD_kegg = topKEGG(R_DDD_kegg,number=nrow(R_DDD_kegg))
+R_DDD_kegg[,'P.ADJ.DE'] = p.adjust(R_DDD_kegg$P.DE,'fdr')
+
+R_S_UUU_geo = goana(allgenes_entrez[r_s_pattern == 'UUU'],universe=allgenes_entrez)
+R_S_UUU_geo = topGO(R_S_UUU_geo,number=nrow(R_S_UUU_geo))
+R_S_UUU_geo[,'P.ADJ.DE'] = p.adjust(R_S_UUU_geo$P.DE,'fdr')
+R_S_UUU_kegg = kegga(allgenes_entrez[r_s_pattern == 'UUU'],universe=allgenes_entrez)
+R_S_UUU_kegg = topKEGG(R_S_UUU_kegg,number=nrow(R_S_UUU_kegg))
+R_S_UUU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UUU_kegg$P.DE,'fdr')
+
+R_S_UUN_geo = goana(allgenes_entrez[r_s_pattern == 'UUN'],universe=allgenes_entrez)
+R_S_UUN_geo = topGO(R_S_UUN_geo,number=nrow(R_S_UUN_geo))
+R_S_UUN_geo[,'P.ADJ.DE'] = p.adjust(R_S_UUN_geo$P.DE,'fdr')
+R_S_UUN_kegg = kegga(allgenes_entrez[r_s_pattern == 'UUN'],universe=allgenes_entrez)
+R_S_UUN_kegg = topKEGG(R_S_UUN_kegg,number=nrow(R_S_UUN_kegg))
+R_S_UUN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UUN_kegg$P.DE,'fdr')
+
+R_S_UUD_geo = goana(allgenes_entrez[r_s_pattern == 'UUD'],universe=allgenes_entrez)
+R_S_UUD_geo = topGO(R_S_UUD_geo,number=nrow(R_S_UUD_geo))
+R_S_UUD_geo[,'P.ADJ.DE'] = p.adjust(R_S_UUD_geo$P.DE,'fdr')
+R_S_UUD_kegg = kegga(allgenes_entrez[r_s_pattern == 'UUD'],universe=allgenes_entrez)
+R_S_UUD_kegg = topKEGG(R_S_UUD_kegg,number=nrow(R_S_UUD_kegg))
+R_S_UUD_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UUD_kegg$P.DE,'fdr')
+
+R_S_UNU_geo = goana(allgenes_entrez[r_s_pattern == 'UNU'],universe=allgenes_entrez)
+R_S_UNU_geo = topGO(R_S_UNU_geo,number=nrow(R_S_UNU_geo))
+R_S_UNU_geo[,'P.ADJ.DE'] = p.adjust(R_S_UNU_geo$P.DE,'fdr')
+R_S_UNU_kegg = kegga(allgenes_entrez[r_s_pattern == 'UNU'],universe=allgenes_entrez)
+R_S_UNU_kegg = topKEGG(R_S_UNU_kegg,number=nrow(R_S_UNU_kegg))
+R_S_UNU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UNU_kegg$P.DE,'fdr')
+
+R_S_UNN_geo = goana(allgenes_entrez[r_s_pattern == 'UNN'],universe=allgenes_entrez)
+R_S_UNN_geo = topGO(R_S_UNN_geo,number=nrow(R_S_UNN_geo))
+R_S_UNN_geo[,'P.ADJ.DE'] = p.adjust(R_S_UNN_geo$P.DE,'fdr')
+R_S_UNN_kegg = kegga(allgenes_entrez[r_s_pattern == 'UNN'],universe=allgenes_entrez)
+R_S_UNN_kegg = topKEGG(R_S_UNN_kegg,number=nrow(R_S_UNN_kegg))
+R_S_UNN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UNN_kegg$P.DE,'fdr')
+
+R_S_UND_geo = goana(allgenes_entrez[r_s_pattern == 'UND'],universe=allgenes_entrez)
+R_S_UND_geo = topGO(R_S_UND_geo,number=nrow(R_S_UND_geo))
+R_S_UND_geo[,'P.ADJ.DE'] = p.adjust(R_S_UND_geo$P.DE,'fdr')
+R_S_UND_kegg = kegga(allgenes_entrez[r_s_pattern == 'UND'],universe=allgenes_entrez)
+R_S_UND_kegg = topKEGG(R_S_UND_kegg,number=nrow(R_S_UND_kegg))
+R_S_UND_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UND_kegg$P.DE,'fdr')
+
+R_S_UDU_geo = goana(allgenes_entrez[r_s_pattern == 'UDU'],universe=allgenes_entrez)
+R_S_UDU_geo = topGO(R_S_UDU_geo,number=nrow(R_S_UDU_geo))
+R_S_UDU_geo[,'P.ADJ.DE'] = p.adjust(R_S_UDU_geo$P.DE,'fdr')
+R_S_UDU_kegg = kegga(allgenes_entrez[r_s_pattern == 'UDU'],universe=allgenes_entrez)
+R_S_UDU_kegg = topKEGG(R_S_UDU_kegg,number=nrow(R_S_UDU_kegg))
+R_S_UDU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UDU_kegg$P.DE,'fdr')
+
+R_S_UDN_geo = goana(allgenes_entrez[r_s_pattern == 'UDN'],universe=allgenes_entrez)
+R_S_UDN_geo = topGO(R_S_UDN_geo,number=nrow(R_S_UDN_geo))
+R_S_UDN_geo[,'P.ADJ.DE'] = p.adjust(R_S_UDN_geo$P.DE,'fdr')
+R_S_UDN_kegg = kegga(allgenes_entrez[r_s_pattern == 'UDN'],universe=allgenes_entrez)
+R_S_UDN_kegg = topKEGG(R_S_UDN_kegg,number=nrow(R_S_UDN_kegg))
+R_S_UDN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UDN_kegg$P.DE,'fdr')
+
+R_S_UDD_geo = goana(allgenes_entrez[r_s_pattern == 'UDD'],universe=allgenes_entrez)
+R_S_UDD_geo = topGO(R_S_UDD_geo,number=nrow(R_S_UDD_geo))
+R_S_UDD_geo[,'P.ADJ.DE'] = p.adjust(R_S_UDD_geo$P.DE,'fdr')
+R_S_UDD_kegg = kegga(allgenes_entrez[r_s_pattern == 'UDD'],universe=allgenes_entrez)
+R_S_UDD_kegg = topKEGG(R_S_UDD_kegg,number=nrow(R_S_UDD_kegg))
+R_S_UDD_kegg[,'P.ADJ.DE'] = p.adjust(R_S_UDD_kegg$P.DE,'fdr')
+
+R_S_NUU_geo = goana(allgenes_entrez[r_s_pattern == 'NUU'],universe=allgenes_entrez)
+R_S_NUU_geo = topGO(R_S_NUU_geo,number=nrow(R_S_NUU_geo))
+R_S_NUU_geo[,'P.ADJ.DE'] = p.adjust(R_S_NUU_geo$P.DE,'fdr')
+R_S_NUU_kegg = kegga(allgenes_entrez[r_s_pattern == 'NUU'],universe=allgenes_entrez)
+R_S_NUU_kegg = topKEGG(R_S_NUU_kegg,number=nrow(R_S_NUU_kegg))
+R_S_NUU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NUU_kegg$P.DE,'fdr')
+
+R_S_NUN_geo = goana(allgenes_entrez[r_s_pattern == 'NUN'],universe=allgenes_entrez)
+R_S_NUN_geo = topGO(R_S_NUN_geo,number=nrow(R_S_NUN_geo))
+R_S_NUN_geo[,'P.ADJ.DE'] = p.adjust(R_S_NUN_geo$P.DE,'fdr')
+R_S_NUN_kegg = kegga(allgenes_entrez[r_s_pattern == 'NUN'],universe=allgenes_entrez)
+R_S_NUN_kegg = topKEGG(R_S_NUN_kegg,number=nrow(R_S_NUN_kegg))
+R_S_NUN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NUN_kegg$P.DE,'fdr')
+
+R_S_NUD_geo = goana(allgenes_entrez[r_s_pattern == 'NUD'],universe=allgenes_entrez)
+R_S_NUD_geo = topGO(R_S_NUD_geo,number=nrow(R_S_NUD_geo))
+R_S_NUD_geo[,'P.ADJ.DE'] = p.adjust(R_S_NUD_geo$P.DE,'fdr')
+R_S_NUD_kegg = kegga(allgenes_entrez[r_s_pattern == 'NUD'],universe=allgenes_entrez)
+R_S_NUD_kegg = topKEGG(R_S_NUD_kegg,number=nrow(R_S_NUD_kegg))
+R_S_NUD_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NUD_kegg$P.DE,'fdr')
+
+R_S_NNU_geo = goana(allgenes_entrez[r_s_pattern == 'NNU'],universe=allgenes_entrez)
+R_S_NNU_geo = topGO(R_S_NNU_geo,number=nrow(R_S_NNU_geo))
+R_S_NNU_geo[,'P.ADJ.DE'] = p.adjust(R_S_NNU_geo$P.DE,'fdr')
+R_S_NNU_kegg = kegga(allgenes_entrez[r_s_pattern == 'NNU'],universe=allgenes_entrez)
+R_S_NNU_kegg = topKEGG(R_S_NNU_kegg,number=nrow(R_S_NNU_kegg))
+R_S_NNU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NNU_kegg$P.DE,'fdr')
+
+R_S_NNN_geo = goana(allgenes_entrez[r_s_pattern == 'NNN'],universe=allgenes_entrez)
+R_S_NNN_geo = topGO(R_S_NNN_geo,number=nrow(R_S_NNN_geo))
+R_S_NNN_geo[,'P.ADJ.DE'] = p.adjust(R_S_NNN_geo$P.DE,'fdr')
+R_S_NNN_kegg = kegga(allgenes_entrez[r_s_pattern == 'NNN'],universe=allgenes_entrez)
+R_S_NNN_kegg = topKEGG(R_S_NNN_kegg,number=nrow(R_S_NNN_kegg))
+R_S_NNN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NNN_kegg$P.DE,'fdr')
+
+R_S_NND_geo = goana(allgenes_entrez[r_s_pattern == 'NND'],universe=allgenes_entrez)
+R_S_NND_geo = topGO(R_S_NND_geo,number=nrow(R_S_NND_geo))
+R_S_NND_geo[,'P.ADJ.DE'] = p.adjust(R_S_NND_geo$P.DE,'fdr')
+R_S_NND_kegg = kegga(allgenes_entrez[r_s_pattern == 'NND'],universe=allgenes_entrez)
+R_S_NND_kegg = topKEGG(R_S_NND_kegg,number=nrow(R_S_NND_kegg))
+R_S_NND_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NND_kegg$P.DE,'fdr')
+
+R_S_NDU_geo = goana(allgenes_entrez[r_s_pattern == 'NDU'],universe=allgenes_entrez)
+R_S_NDU_geo = topGO(R_S_NDU_geo,number=nrow(R_S_NDU_geo))
+R_S_NDU_geo[,'P.ADJ.DE'] = p.adjust(R_S_NDU_geo$P.DE,'fdr')
+R_S_NDU_kegg = kegga(allgenes_entrez[r_s_pattern == 'NDU'],universe=allgenes_entrez)
+R_S_NDU_kegg = topKEGG(R_S_NDU_kegg,number=nrow(R_S_NDU_kegg))
+R_S_NDU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NDU_kegg$P.DE,'fdr')
+
+R_S_NDN_geo = goana(allgenes_entrez[r_s_pattern == 'NDN'],universe=allgenes_entrez)
+R_S_NDN_geo = topGO(R_S_NDN_geo,number=nrow(R_S_NDN_geo))
+R_S_NDN_geo[,'P.ADJ.DE'] = p.adjust(R_S_NDN_geo$P.DE,'fdr')
+R_S_NDN_kegg = kegga(allgenes_entrez[r_s_pattern == 'NDN'],universe=allgenes_entrez)
+R_S_NDN_kegg = topKEGG(R_S_NDN_kegg,number=nrow(R_S_NDN_kegg))
+R_S_NDN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NDN_kegg$P.DE,'fdr')
+
+R_S_NDD_geo = goana(allgenes_entrez[r_s_pattern == 'NDD'],universe=allgenes_entrez)
+R_S_NDD_geo = topGO(R_S_NDD_geo,number=nrow(R_S_NDD_geo))
+R_S_NDD_geo[,'P.ADJ.DE'] = p.adjust(R_S_NDD_geo$P.DE,'fdr')
+R_S_NDD_kegg = kegga(allgenes_entrez[r_s_pattern == 'NDD'],universe=allgenes_entrez)
+R_S_NDD_kegg = topKEGG(R_S_NDD_kegg,number=nrow(R_S_NDD_kegg))
+R_S_NDD_kegg[,'P.ADJ.DE'] = p.adjust(R_S_NDD_kegg$P.DE,'fdr')
+
+R_S_DUU_geo = goana(allgenes_entrez[r_s_pattern == 'DUU'],universe=allgenes_entrez)
+R_S_DUU_geo = topGO(R_S_DUU_geo,number=nrow(R_S_DUU_geo))
+R_S_DUU_geo[,'P.ADJ.DE'] = p.adjust(R_S_DUU_geo$P.DE,'fdr')
+R_S_DUU_kegg = kegga(allgenes_entrez[r_s_pattern == 'DUU'],universe=allgenes_entrez)
+R_S_DUU_kegg = topKEGG(R_S_DUU_kegg,number=nrow(R_S_DUU_kegg))
+R_S_DUU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DUU_kegg$P.DE,'fdr')
+
+R_S_DUN_geo = goana(allgenes_entrez[r_s_pattern == 'DUN'],universe=allgenes_entrez)
+R_S_DUN_geo = topGO(R_S_DUN_geo,number=nrow(R_S_DUN_geo))
+R_S_DUN_geo[,'P.ADJ.DE'] = p.adjust(R_S_DUN_geo$P.DE,'fdr')
+R_S_DUN_kegg = kegga(allgenes_entrez[r_s_pattern == 'DUN'],universe=allgenes_entrez)
+R_S_DUN_kegg = topKEGG(R_S_DUN_kegg,number=nrow(R_S_DUN_kegg))
+R_S_DUN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DUN_kegg$P.DE,'fdr')
+
+R_S_DUD_geo = goana(allgenes_entrez[r_s_pattern == 'DUD'],universe=allgenes_entrez)
+R_S_DUD_geo = topGO(R_S_DUD_geo,number=nrow(R_S_DUD_geo))
+R_S_DUD_geo[,'P.ADJ.DE'] = p.adjust(R_S_DUD_geo$P.DE,'fdr')
+R_S_DUD_kegg = kegga(allgenes_entrez[r_s_pattern == 'DUD'],universe=allgenes_entrez)
+R_S_DUD_kegg = topKEGG(R_S_DUD_kegg,number=nrow(R_S_DUD_kegg))
+R_S_DUD_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DUD_kegg$P.DE,'fdr')
+
+R_S_DNU_geo = goana(allgenes_entrez[r_s_pattern == 'DNU'],universe=allgenes_entrez)
+R_S_DNU_geo = topGO(R_S_DNU_geo,number=nrow(R_S_DNU_geo))
+R_S_DNU_geo[,'P.ADJ.DE'] = p.adjust(R_S_DNU_geo$P.DE,'fdr')
+R_S_DNU_kegg = kegga(allgenes_entrez[r_s_pattern == 'DNU'],universe=allgenes_entrez)
+R_S_DNU_kegg = topKEGG(R_S_DNU_kegg,number=nrow(R_S_DNU_kegg))
+R_S_DNU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DNU_kegg$P.DE,'fdr')
+
+R_S_DNN_geo = goana(allgenes_entrez[r_s_pattern == 'DNN'],universe=allgenes_entrez)
+R_S_DNN_geo = topGO(R_S_DNN_geo,number=nrow(R_S_DNN_geo))
+R_S_DNN_geo[,'P.ADJ.DE'] = p.adjust(R_S_DNN_geo$P.DE,'fdr')
+R_S_DNN_kegg = kegga(allgenes_entrez[r_s_pattern == 'DNN'],universe=allgenes_entrez)
+R_S_DNN_kegg = topKEGG(R_S_DNN_kegg,number=nrow(R_S_DNN_kegg))
+R_S_DNN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DNN_kegg$P.DE,'fdr')
+
+R_S_DND_geo = goana(allgenes_entrez[r_s_pattern == 'DND'],universe=allgenes_entrez)
+R_S_DND_geo = topGO(R_S_DND_geo,number=nrow(R_S_DND_geo))
+R_S_DND_geo[,'P.ADJ.DE'] = p.adjust(R_S_DND_geo$P.DE,'fdr')
+R_S_DND_kegg = kegga(allgenes_entrez[r_s_pattern == 'DND'],universe=allgenes_entrez)
+R_S_DND_kegg = topKEGG(R_S_DND_kegg,number=nrow(R_S_DND_kegg))
+R_S_DND_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DND_kegg$P.DE,'fdr')
+
+R_S_DDU_geo = goana(allgenes_entrez[r_s_pattern == 'DDU'],universe=allgenes_entrez)
+R_S_DDU_geo = topGO(R_S_DDU_geo,number=nrow(R_S_DDU_geo))
+R_S_DDU_geo[,'P.ADJ.DE'] = p.adjust(R_S_DDU_geo$P.DE,'fdr')
+R_S_DDU_kegg = kegga(allgenes_entrez[r_s_pattern == 'DDU'],universe=allgenes_entrez)
+R_S_DDU_kegg = topKEGG(R_S_DDU_kegg,number=nrow(R_S_DDU_kegg))
+R_S_DDU_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DDU_kegg$P.DE,'fdr')
+
+R_S_DDN_geo = goana(allgenes_entrez[r_s_pattern == 'DDN'],universe=allgenes_entrez)
+R_S_DDN_geo = topGO(R_S_DDN_geo,number=nrow(R_S_DDN_geo))
+R_S_DDN_geo[,'P.ADJ.DE'] = p.adjust(R_S_DDN_geo$P.DE,'fdr')
+R_S_DDN_kegg = kegga(allgenes_entrez[r_s_pattern == 'DDN'],universe=allgenes_entrez)
+R_S_DDN_kegg = topKEGG(R_S_DDN_kegg,number=nrow(R_S_DDN_kegg))
+R_S_DDN_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DDN_kegg$P.DE,'fdr')
+
+R_S_DDD_geo = goana(allgenes_entrez[r_s_pattern == 'DDD'],universe=allgenes_entrez)
+R_S_DDD_geo = topGO(R_S_DDD_geo,number=nrow(R_S_DDD_geo))
+R_S_DDD_geo[,'P.ADJ.DE'] = p.adjust(R_S_DDD_geo$P.DE,'fdr')
+R_S_DDD_kegg = kegga(allgenes_entrez[r_s_pattern == 'DDD'],universe=allgenes_entrez)
+R_S_DDD_kegg = topKEGG(R_S_DDD_kegg,number=nrow(R_S_DDD_kegg))
+R_S_DDD_kegg[,'P.ADJ.DE'] = p.adjust(R_S_DDD_kegg$P.DE,'fdr')
+
+# output gene results
+f = file('gene.tsv','w')
+write('ENTREZ\tSYMBOL\tR0_S0 p.adj\tR0_S0 logFC\tR24_S24 p.adj\tR24_S24 logFC\tS24_S0 p.adj\tS24_S0 logFC\tR24_R0 p.adj\tR24_R0 logFC\tR24_R0-S24_S0 p.adj\tR24_R0-S24_S0 logFC\tS_Pattern\tS6_S0 logFC\tS12_S6 logFC\tS24_S12 logFC\tR_Pattern\tR6_R0 logFC\tR12_R6 logFC\tR24_R12 logFC\tR-S_Pattern\tR6_R0-S6_S0  logFC\tR12_R6-S12_S6  logFC\tR24_R12-S24_S12 logFC',f,append=TRUE)
+for (i in 1:length(allgenes_entrez)){
+  write(sprintf('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s',allgenes_entrez[i],allgenes_symbol[i],R0_S0_padj[i],R0_S0_logFC[i],R24_S24_padj[i],R24_S24_logFC[i],S24_S0_padj[i],S24_S0_logFC[i],R24_R0_padj[i],R24_R0_logFC[i],R24_R0_S24_S0_padj[i],R24_R0_S24_S0_logFC[i],s_pattern[i],S6_S0_logFC[i],S12_S6_logFC[i],S24_S12_logFC[i],r_pattern[i],R6_R0_logFC[i],R12_R6_logFC[i],R24_R12_logFC[i],r_s_pattern[i],R6_R0_S6_S0_logFC[i],R12_R6_S12_S6_logFC[i],R24_R12_S24_S12_logFC[i]),f,append=TRUE)
+}
+close(f);
+
+# output geo results
+term = row.names(R0_S0_geo)
+pathways = R0_S0_geo$Term
+ontology = R0_S0_geo$Ont
+
+pathways = pathways[order(term)]
+ontology = ontology[order(term)]
+term = term[order(term)]
+
+f = file('geo.tsv','w')
+write('TERM\tONTOLOGY\tNAME\tR0_S0 p.adj\tR24_S24 p.adj\tS24_S0 p.adj\tR24_R0 p.adj\tR24_R0-S24_S0 p.adj\tS_UUU p.adj\tS_UUN p.adj\tS_UUD p.adj\tS_UNU p.adj\tS_UNN p.adj\tS_UND p.adj\tS_UDU p.adj\tS_UDN p.adj\tS_UDD p.adj\tS_NUU p.adj\tS_NUN p.adj\tS_NUD p.adj\tS_NNU p.adj\tS_NNN p.adj\tS_NND p.adj\tS_NDU p.adj\tS_NDN p.adj\tS_NDD p.adj\tS_DUU p.adj\tS_DUN p.adj\tS_DUD p.adj\tS_DNU p.adj\tS_DNN p.adj\tS_DND p.adj\tS_DDU p.adj\tS_DDN p.adj\tS_DDD p.adj\tR_UUU p.adj\tR_UUN p.adj\tR_UUD p.adj\tR_UNU p.adj\tR_UNN p.adj\tR_UND p.adj\tR_UDU p.adj\tR_UDN p.adj\tR_UDD p.adj\tR_NUU p.adj\tR_NUN p.adj\tR_NUD p.adj\tR_NNU p.adj\tR_NNN p.adj\tR_NND p.adj\tR_NDU p.adj\tR_NDN p.adj\tR_NDD p.adj\tR_DUU p.adj\tR_DUN p.adj\tR_DUD p.adj\tR_DNU p.adj\tR_DNN p.adj\tR_DND p.adj\tR_DDU p.adj\tR_DDN p.adj\tR_DDD p.adj\tR-S_UUU p.adj\tR-S_UUN p.adj\tR-S_UUD p.adj\tR-S_UNU p.adj\tR-S_UNN p.adj\tR-S_UND p.adj\tR-S_UDU p.adj\tR-S_UDN p.adj\tR-S_UDD p.adj\tR-S_NUU p.adj\tR-S_NUN p.adj\tR-S_NUD p.adj\tR-S_NNU p.adj\tR-S_NNN p.adj\tR-S_NND p.adj\tR-S_NDU p.adj\tR-S_NDN p.adj\tR-S_NDD p.adj\tR-S_DUU p.adj\tR-S_DUN p.adj\tR-S_DUD p.adj\tR-S_DNU p.adj\tR-S_DNN p.adj\tR-S_DND p.adj\tR-S_DDU p.adj\tR-S_DDN p.adj\tR-S_DDD p.adj',f,append=TRUE)
+for (i in 1:length(term)){
+  connection = sprintf(paste('%s',paste(replicate(26,'\t%s'),collapse=''),sep=''),R_S_UUU_geo$P.ADJ.DE[row.names(R_S_UUU_geo) == term[i]],R_S_UUN_geo$P.ADJ.DE[row.names(R_S_UUN_geo) == term[i]],R_S_UUD_geo$P.ADJ.DE[row.names(R_S_UUD_geo) == term[i]],R_S_UNU_geo$P.ADJ.DE[row.names(R_S_UNU_geo) == term[i]],R_S_UNN_geo$P.ADJ.DE[row.names(R_S_UNN_geo) == term[i]],R_S_UND_geo$P.ADJ.DE[row.names(R_S_UND_geo) == term[i]],R_S_UDU_geo$P.ADJ.DE[row.names(R_S_UDU_geo) == term[i]],R_S_UDN_geo$P.ADJ.DE[row.names(R_S_UDN_geo) == term[i]],R_S_UDD_geo$P.ADJ.DE[row.names(R_S_UDD_geo) == term[i]],R_S_NUU_geo$P.ADJ.DE[row.names(R_S_NUU_geo) == term[i]],R_S_NUN_geo$P.ADJ.DE[row.names(R_S_NUN_geo) == term[i]],R_S_NUD_geo$P.ADJ.DE[row.names(R_S_NUD_geo) == term[i]],R_S_NNU_geo$P.ADJ.DE[row.names(R_S_NNU_geo) == term[i]],R_S_NNN_geo$P.ADJ.DE[row.names(R_S_NNN_geo) == term[i]],R_S_NND_geo$P.ADJ.DE[row.names(R_S_NND_geo) == term[i]],R_S_NDU_geo$P.ADJ.DE[row.names(R_S_NDU_geo) == term[i]],R_S_NDN_geo$P.ADJ.DE[row.names(R_S_NDN_geo) == term[i]],R_S_NDD_geo$P.ADJ.DE[row.names(R_S_NDD_geo) == term[i]],R_S_DUU_geo$P.ADJ.DE[row.names(R_S_DUU_geo) == term[i]],R_S_DUN_geo$P.ADJ.DE[row.names(R_S_DUN_geo) == term[i]],R_S_DUD_geo$P.ADJ.DE[row.names(R_S_DUD_geo) == term[i]],R_S_DNU_geo$P.ADJ.DE[row.names(R_S_DNU_geo) == term[i]],R_S_DNN_geo$P.ADJ.DE[row.names(R_S_DNN_geo) == term[i]],R_S_DND_geo$P.ADJ.DE[row.names(R_S_DND_geo) == term[i]],R_S_DDU_geo$P.ADJ.DE[row.names(R_S_DDU_geo) == term[i]],R_S_DDN_geo$P.ADJ.DE[row.names(R_S_DDN_geo) == term[i]],R_S_DDD_geo$P.ADJ.DE[row.names(R_S_DDD_geo) == term[i]])
+  write(sprintf(paste('%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s',paste(replicate(27*2+1,'\t%s'),collapse =''),sep=''),term[i],ontology[i],pathways[i],R0_S0_geo$P.ADJ.DE[row.names(R0_S0_geo) == term[i]],R24_S24_geo$P.ADJ.DE[row.names(R24_S24_geo) == term[i]],S24_S0_geo$P.ADJ.DE[row.names(S24_S0_geo) == term[i]],R24_R0_geo$P.ADJ.DE[row.names(R24_R0_geo) == term[i]],R24_R0_S24_S0_geo$P.ADJ.DE[row.names(R24_R0_S24_S0_geo) == term[i]],S_UUU_geo$P.ADJ.DE[row.names(S_UUU_geo) == term[i]],S_UUN_geo$P.ADJ.DE[row.names(S_UUN_geo) == term[i]],S_UUD_geo$P.ADJ.DE[row.names(S_UUD_geo) == term[i]],S_UNU_geo$P.ADJ.DE[row.names(S_UNU_geo) == term[i]],S_UNN_geo$P.ADJ.DE[row.names(S_UNN_geo) == term[i]],S_UND_geo$P.ADJ.DE[row.names(S_UND_geo) == term[i]],S_UDU_geo$P.ADJ.DE[row.names(S_UDU_geo) == term[i]],S_UDN_geo$P.ADJ.DE[row.names(S_UDN_geo) == term[i]],S_UDD_geo$P.ADJ.DE[row.names(S_UDD_geo) == term[i]],S_NUU_geo$P.ADJ.DE[row.names(S_NUU_geo) == term[i]],S_NUN_geo$P.ADJ.DE[row.names(S_NUN_geo) == term[i]],S_NUD_geo$P.ADJ.DE[row.names(S_NUD_geo) == term[i]],S_NNU_geo$P.ADJ.DE[row.names(S_NNU_geo) == term[i]],S_NNN_geo$P.ADJ.DE[row.names(S_NNN_geo) == term[i]],S_NND_geo$P.ADJ.DE[row.names(S_NND_geo) == term[i]],S_NDU_geo$P.ADJ.DE[row.names(S_NDU_geo) == term[i]],S_NDN_geo$P.ADJ.DE[row.names(S_NDN_geo) == term[i]],S_NDD_geo$P.ADJ.DE[row.names(S_NDD_geo) == term[i]],S_DUU_geo$P.ADJ.DE[row.names(S_DUU_geo) == term[i]],S_DUN_geo$P.ADJ.DE[row.names(S_DUN_geo) == term[i]],S_DUD_geo$P.ADJ.DE[row.names(S_DUD_geo) == term[i]],S_DNU_geo$P.ADJ.DE[row.names(S_DNU_geo) == term[i]],S_DNN_geo$P.ADJ.DE[row.names(S_DNN_geo) == term[i]],S_DND_geo$P.ADJ.DE[row.names(S_DND_geo) == term[i]],S_DDU_geo$P.ADJ.DE[row.names(S_DDU_geo) == term[i]],S_DDN_geo$P.ADJ.DE[row.names(S_DDN_geo) == term[i]],S_DDD_geo$P.ADJ.DE[row.names(S_DDD_geo) == term[i]],R_UUU_geo$P.ADJ.DE[row.names(R_UUU_geo) == term[i]],R_UUN_geo$P.ADJ.DE[row.names(R_UUN_geo) == term[i]],R_UUD_geo$P.ADJ.DE[row.names(R_UUD_geo) == term[i]],R_UNU_geo$P.ADJ.DE[row.names(R_UNU_geo) == term[i]],R_UNN_geo$P.ADJ.DE[row.names(R_UNN_geo) == term[i]],R_UND_geo$P.ADJ.DE[row.names(R_UND_geo) == term[i]],R_UDU_geo$P.ADJ.DE[row.names(R_UDU_geo) == term[i]],R_UDN_geo$P.ADJ.DE[row.names(R_UDN_geo) == term[i]],R_UDD_geo$P.ADJ.DE[row.names(R_UDD_geo) == term[i]],R_NUU_geo$P.ADJ.DE[row.names(R_NUU_geo) == term[i]],R_NUN_geo$P.ADJ.DE[row.names(R_NUN_geo) == term[i]],R_NUD_geo$P.ADJ.DE[row.names(R_NUD_geo) == term[i]],R_NNU_geo$P.ADJ.DE[row.names(R_NNU_geo) == term[i]],R_NNN_geo$P.ADJ.DE[row.names(R_NNN_geo) == term[i]],R_NND_geo$P.ADJ.DE[row.names(R_NND_geo) == term[i]],R_NDU_geo$P.ADJ.DE[row.names(R_NDU_geo) == term[i]],R_NDN_geo$P.ADJ.DE[row.names(R_NDN_geo) == term[i]],R_NDD_geo$P.ADJ.DE[row.names(R_NDD_geo) == term[i]],R_DUU_geo$P.ADJ.DE[row.names(R_DUU_geo) == term[i]],R_DUN_geo$P.ADJ.DE[row.names(R_DUN_geo) == term[i]],R_DUD_geo$P.ADJ.DE[row.names(R_DUD_geo) == term[i]],R_DNU_geo$P.ADJ.DE[row.names(R_DNU_geo) == term[i]],R_DNN_geo$P.ADJ.DE[row.names(R_DNN_geo) == term[i]],R_DND_geo$P.ADJ.DE[row.names(R_DND_geo) == term[i]],R_DDU_geo$P.ADJ.DE[row.names(R_DDU_geo) == term[i]],R_DDN_geo$P.ADJ.DE[row.names(R_DDN_geo) == term[i]],R_DDD_geo$P.ADJ.DE[row.names(R_DDD_geo) == term[i]],connection),f,append=TRUE)
+}
+close(f)
+
+# output kegg results
+term = row.names(R0_S0_kegg)
+pathways = R0_S0_kegg$Pathway
+
+pathways = pathways[order(term)]
+term = term[order(term)]
+
+f = file('kegg.tsv','w')
+write('TERM\tNAME\tR0_S0 p.adj\tR24_S24 p.adj\tS24_S0 p.adj\tR24_R0 p.adj\tR24_R0-S24_S0 p.adj\tS_UUU p.adj\tS_UUN p.adj\tS_UUD p.adj\tS_UNU p.adj\tS_UNN p.adj\tS_UND p.adj\tS_UDU p.adj\tS_UDN p.adj\tS_UDD p.adj\tS_NUU p.adj\tS_NUN p.adj\tS_NUD p.adj\tS_NNU p.adj\tS_NNN p.adj\tS_NND p.adj\tS_NDU p.adj\tS_NDN p.adj\tS_NDD p.adj\tS_DUU p.adj\tS_DUN p.adj\tS_DUD p.adj\tS_DNU p.adj\tS_DNN p.adj\tS_DND p.adj\tS_DDU p.adj\tS_DDN p.adj\tS_DDD p.adj\tR_UUU p.adj\tR_UUN p.adj\tR_UUD p.adj\tR_UNU p.adj\tR_UNN p.adj\tR_UND p.adj\tR_UDU p.adj\tR_UDN p.adj\tR_UDD p.adj\tR_NUU p.adj\tR_NUN p.adj\tR_NUD p.adj\tR_NNU p.adj\tR_NNN p.adj\tR_NND p.adj\tR_NDU p.adj\tR_NDN p.adj\tR_NDD p.adj\tR_DUU p.adj\tR_DUN p.adj\tR_DUD p.adj\tR_DNU p.adj\tR_DNN p.adj\tR_DND p.adj\tR_DDU p.adj\tR_DDN p.adj\tR_DDD p.adj\tR-S_UUU p.adj\tR-S_UUN p.adj\tR-S_UUD p.adj\tR-S_UNU p.adj\tR-S_UNN p.adj\tR-S_UND p.adj\tR-S_UDU p.adj\tR-S_UDN p.adj\tR-S_UDD p.adj\tR-S_NUU p.adj\tR-S_NUN p.adj\tR-S_NUD p.adj\tR-S_NNU p.adj\tR-S_NNN p.adj\tR-S_NND p.adj\tR-S_NDU p.adj\tR-S_NDN p.adj\tR-S_NDD p.adj\tR-S_DUU p.adj\tR-S_DUN p.adj\tR-S_DUD p.adj\tR-S_DNU p.adj\tR-S_DNN p.adj\tR-S_DND p.adj\tR-S_DDU p.adj\tR-S_DDN p.adj\tR-S_DDD p.adj',f,append=TRUE)
+for (i in 1:length(term)){
+  connection = sprintf(paste('%s',paste(replicate(26,'\t%s'),collapse=''),sep=''),R_S_UUU_kegg$P.ADJ.DE[row.names(R_S_UUU_kegg) == term[i]],R_S_UUN_kegg$P.ADJ.DE[row.names(R_S_UUN_kegg) == term[i]],R_S_UUD_kegg$P.ADJ.DE[row.names(R_S_UUD_kegg) == term[i]],R_S_UNU_kegg$P.ADJ.DE[row.names(R_S_UNU_kegg) == term[i]],R_S_UNN_kegg$P.ADJ.DE[row.names(R_S_UNN_kegg) == term[i]],R_S_UND_kegg$P.ADJ.DE[row.names(R_S_UND_kegg) == term[i]],R_S_UDU_kegg$P.ADJ.DE[row.names(R_S_UDU_kegg) == term[i]],R_S_UDN_kegg$P.ADJ.DE[row.names(R_S_UDN_kegg) == term[i]],R_S_UDD_kegg$P.ADJ.DE[row.names(R_S_UDD_kegg) == term[i]],R_S_NUU_kegg$P.ADJ.DE[row.names(R_S_NUU_kegg) == term[i]],R_S_NUN_kegg$P.ADJ.DE[row.names(R_S_NUN_kegg) == term[i]],R_S_NUD_kegg$P.ADJ.DE[row.names(R_S_NUD_kegg) == term[i]],R_S_NNU_kegg$P.ADJ.DE[row.names(R_S_NNU_kegg) == term[i]],R_S_NNN_kegg$P.ADJ.DE[row.names(R_S_NNN_kegg) == term[i]],R_S_NND_kegg$P.ADJ.DE[row.names(R_S_NND_kegg) == term[i]],R_S_NDU_kegg$P.ADJ.DE[row.names(R_S_NDU_kegg) == term[i]],R_S_NDN_kegg$P.ADJ.DE[row.names(R_S_NDN_kegg) == term[i]],R_S_NDD_kegg$P.ADJ.DE[row.names(R_S_NDD_kegg) == term[i]],R_S_DUU_kegg$P.ADJ.DE[row.names(R_S_DUU_kegg) == term[i]],R_S_DUN_kegg$P.ADJ.DE[row.names(R_S_DUN_kegg) == term[i]],R_S_DUD_kegg$P.ADJ.DE[row.names(R_S_DUD_kegg) == term[i]],R_S_DNU_kegg$P.ADJ.DE[row.names(R_S_DNU_kegg) == term[i]],R_S_DNN_kegg$P.ADJ.DE[row.names(R_S_DNN_kegg) == term[i]],R_S_DND_kegg$P.ADJ.DE[row.names(R_S_DND_kegg) == term[i]],R_S_DDU_kegg$P.ADJ.DE[row.names(R_S_DDU_kegg) == term[i]],R_S_DDN_kegg$P.ADJ.DE[row.names(R_S_DDN_kegg) == term[i]],R_S_DDD_kegg$P.ADJ.DE[row.names(R_S_DDD_kegg) == term[i]])
+  write(sprintf(paste('%s\t%s\t%s\t%s\t%s\t%s\t%s',paste(replicate(27*2+1,'\t%s'),collapse =''),sep=''),term[i],pathways[i],R0_S0_kegg$P.ADJ.DE[row.names(R0_S0_kegg) == term[i]],R24_S24_kegg$P.ADJ.DE[row.names(R24_S24_kegg) == term[i]],S24_S0_kegg$P.ADJ.DE[row.names(S24_S0_kegg) == term[i]],R24_R0_kegg$P.ADJ.DE[row.names(R24_R0_kegg) == term[i]],R24_R0_S24_S0_kegg$P.ADJ.DE[row.names(R24_R0_S24_S0_kegg) == term[i]],S_UUU_kegg$P.ADJ.DE[row.names(S_UUU_kegg) == term[i]],S_UUN_kegg$P.ADJ.DE[row.names(S_UUN_kegg) == term[i]],S_UUD_kegg$P.ADJ.DE[row.names(S_UUD_kegg) == term[i]],S_UNU_kegg$P.ADJ.DE[row.names(S_UNU_kegg) == term[i]],S_UNN_kegg$P.ADJ.DE[row.names(S_UNN_kegg) == term[i]],S_UND_kegg$P.ADJ.DE[row.names(S_UND_kegg) == term[i]],S_UDU_kegg$P.ADJ.DE[row.names(S_UDU_kegg) == term[i]],S_UDN_kegg$P.ADJ.DE[row.names(S_UDN_kegg) == term[i]],S_UDD_kegg$P.ADJ.DE[row.names(S_UDD_kegg) == term[i]],S_NUU_kegg$P.ADJ.DE[row.names(S_NUU_kegg) == term[i]],S_NUN_kegg$P.ADJ.DE[row.names(S_NUN_kegg) == term[i]],S_NUD_kegg$P.ADJ.DE[row.names(S_NUD_kegg) == term[i]],S_NNU_kegg$P.ADJ.DE[row.names(S_NNU_kegg) == term[i]],S_NNN_kegg$P.ADJ.DE[row.names(S_NNN_kegg) == term[i]],S_NND_kegg$P.ADJ.DE[row.names(S_NND_kegg) == term[i]],S_NDU_kegg$P.ADJ.DE[row.names(S_NDU_kegg) == term[i]],S_NDN_kegg$P.ADJ.DE[row.names(S_NDN_kegg) == term[i]],S_NDD_kegg$P.ADJ.DE[row.names(S_NDD_kegg) == term[i]],S_DUU_kegg$P.ADJ.DE[row.names(S_DUU_kegg) == term[i]],S_DUN_kegg$P.ADJ.DE[row.names(S_DUN_kegg) == term[i]],S_DUD_kegg$P.ADJ.DE[row.names(S_DUD_kegg) == term[i]],S_DNU_kegg$P.ADJ.DE[row.names(S_DNU_kegg) == term[i]],S_DNN_kegg$P.ADJ.DE[row.names(S_DNN_kegg) == term[i]],S_DND_kegg$P.ADJ.DE[row.names(S_DND_kegg) == term[i]],S_DDU_kegg$P.ADJ.DE[row.names(S_DDU_kegg) == term[i]],S_DDN_kegg$P.ADJ.DE[row.names(S_DDN_kegg) == term[i]],S_DDD_kegg$P.ADJ.DE[row.names(S_DDD_kegg) == term[i]],R_UUU_kegg$P.ADJ.DE[row.names(R_UUU_kegg) == term[i]],R_UUN_kegg$P.ADJ.DE[row.names(R_UUN_kegg) == term[i]],R_UUD_kegg$P.ADJ.DE[row.names(R_UUD_kegg) == term[i]],R_UNU_kegg$P.ADJ.DE[row.names(R_UNU_kegg) == term[i]],R_UNN_kegg$P.ADJ.DE[row.names(R_UNN_kegg) == term[i]],R_UND_kegg$P.ADJ.DE[row.names(R_UND_kegg) == term[i]],R_UDU_kegg$P.ADJ.DE[row.names(R_UDU_kegg) == term[i]],R_UDN_kegg$P.ADJ.DE[row.names(R_UDN_kegg) == term[i]],R_UDD_kegg$P.ADJ.DE[row.names(R_UDD_kegg) == term[i]],R_NUU_kegg$P.ADJ.DE[row.names(R_NUU_kegg) == term[i]],R_NUN_kegg$P.ADJ.DE[row.names(R_NUN_kegg) == term[i]],R_NUD_kegg$P.ADJ.DE[row.names(R_NUD_kegg) == term[i]],R_NNU_kegg$P.ADJ.DE[row.names(R_NNU_kegg) == term[i]],R_NNN_kegg$P.ADJ.DE[row.names(R_NNN_kegg) == term[i]],R_NND_kegg$P.ADJ.DE[row.names(R_NND_kegg) == term[i]],R_NDU_kegg$P.ADJ.DE[row.names(R_NDU_kegg) == term[i]],R_NDN_kegg$P.ADJ.DE[row.names(R_NDN_kegg) == term[i]],R_NDD_kegg$P.ADJ.DE[row.names(R_NDD_kegg) == term[i]],R_DUU_kegg$P.ADJ.DE[row.names(R_DUU_kegg) == term[i]],R_DUN_kegg$P.ADJ.DE[row.names(R_DUN_kegg) == term[i]],R_DUD_kegg$P.ADJ.DE[row.names(R_DUD_kegg) == term[i]],R_DNU_kegg$P.ADJ.DE[row.names(R_DNU_kegg) == term[i]],R_DNN_kegg$P.ADJ.DE[row.names(R_DNN_kegg) == term[i]],R_DND_kegg$P.ADJ.DE[row.names(R_DND_kegg) == term[i]],R_DDU_kegg$P.ADJ.DE[row.names(R_DDU_kegg) == term[i]],R_DDN_kegg$P.ADJ.DE[row.names(R_DDN_kegg) == term[i]],R_DDD_kegg$P.ADJ.DE[row.names(R_DDD_kegg) == term[i]],connection),f,append=TRUE)
+}
+close(f)
